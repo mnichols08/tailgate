@@ -58,13 +58,26 @@ test('without JavaScript: the market is complete and an order goes through', asy
   await page.goto(base);
   const names = await page.$$eval('produce-card h3', (headings) => headings.map((h) => h.textContent));
   assert.deepEqual(names, ['Heirloom tomatoes', 'Pasture eggs', 'Wildflower honey', 'Butternut squash']);
-  await page.fill('produce-card[item=eggs] input[name=qty]', '2');
-  await page.click('produce-card[item=eggs] button');
+  // Zubra UI's quantity-stepper submits its value with the form, JavaScript or not.
+  await page.click('produce-card[item=eggs] button[type=submit]');
   await page.waitForURL(`${base}/orders`);
-  assert.match(await page.textContent('order-card'), /2 dozen · Pasture eggs/);
-  assert.match(await page.textContent('order-card li[aria-current=step]'), /Placed/);
+  assert.match(await page.textContent('order-card'), /1 dozen · Pasture eggs/);
+  assert.match(await page.textContent('order-card [aria-current=step]'), /Placed/);
   await page.goto(base);
-  assert.equal(await page.getAttribute('produce-card[item=eggs]', 'qty'), '10');
+  assert.equal(await page.getAttribute('produce-card[item=eggs]', 'qty'), '11');
+  await context.close();
+});
+
+test('with JavaScript: the stepper sets how many, and the order lands', async () => {
+  const { context, page } = await device('sam');
+  await page.goto(base);
+  await ready(page, 'quantity-stepper');
+  const card = page.locator('produce-card[item=tomatoes]');
+  await card.locator('quantity-stepper button.more').click();
+  await card.locator('quantity-stepper button.more').click();
+  await card.locator('action-button button').click();
+  await page.waitForURL(`${base}/orders`);
+  assert.match(await page.textContent('order-card'), /3 lb · Heirloom tomatoes/);
   await context.close();
 });
 
@@ -97,7 +110,7 @@ test('a driver claims; the customer sees it live, and sees the driver looking', 
   await driver.page.waitForURL(`${base}/drive`);
 
   // No reload on the customer's page.
-  await card.locator('li[aria-current=step]', { hasText: 'Driver assigned' }).waitFor({ timeout: 5000 });
+  await card.locator('[aria-current=step]', { hasText: 'Driver assigned' }).waitFor({ timeout: 5000 });
   await card.getByText('Driver: Jules').waitFor({ timeout: 5000 });
   // The driver's page shows the order; the customer's card says so.
   await card.getByText('Jules is looking at this order now').waitFor({ timeout: 5000 });
@@ -109,10 +122,10 @@ test('a driver claims; the customer sees it live, and sees the driver looking', 
   await kai.close();
 
   // Picked up, then delivered: the customer follows each step.
-  await driver.page.locator(`.delivery:has(order-card[doc="${doc}"]) button`, { hasText: 'Picked up' }).click();
-  await card.locator('li[aria-current=step]', { hasText: 'On the way' }).waitFor({ timeout: 5000 });
-  await driver.page.locator(`.delivery:has(order-card[doc="${doc}"]) button`, { hasText: 'Delivered' }).click();
-  await card.locator('li[aria-current=step]', { hasText: 'Delivered' }).waitFor({ timeout: 5000 });
+  await driver.page.locator(`.delivery:has(order-card[doc="${doc}"]) delivery-actions button`, { hasText: 'Picked up' }).click();
+  await card.locator('[aria-current=step]', { hasText: 'On the way' }).waitFor({ timeout: 5000 });
+  await driver.page.locator(`.delivery:has(order-card[doc="${doc}"]) delivery-actions button`, { hasText: 'Delivered' }).click();
+  await card.locator('li.done', { hasText: 'Delivered' }).waitFor({ timeout: 5000 });
   await customer.context.close();
   await driver.context.close();
 });
@@ -128,7 +141,7 @@ test('a farmer edits stock offline; the market has it once they reconnect', asyn
 
   await farmer.context.setOffline(true);
   await honey.locator('input[aria-label=Quantity]').fill('30');
-  await honey.locator('input[aria-label="Price in dollars"]').fill('12');
+  await honey.locator('money-input input').fill('12');
   await farmer.page.waitForTimeout(500);
   let market = await (await fetch(base)).text();
   assert.match(market, /item="honey"[^>]*price="\$11\.00" qty="8"/, 'still the old stock while offline');
@@ -142,11 +155,11 @@ test('a farmer edits stock offline; the market has it once they reconnect', asyn
   assert.match(market, /item="honey"[^>]*price="\$12\.00" qty="30"/);
 
   // A new row, named and priced, reaches the market too.
-  await farmer.page.click('button.add');
+  await farmer.page.click('action-button.add button');
   const row = farmer.page.locator('stock-item').last();
   await row.locator('input[aria-label=Item]').fill('Sweet corn');
   await row.locator('input[aria-label=Unit]').fill('dozen');
-  await row.locator('input[aria-label="Price in dollars"]').fill('7');
+  await row.locator('money-input input').fill('7');
   await row.locator('input[aria-label=Quantity]').fill('15');
   for (let i = 0; i < 50 && !market.includes('Sweet corn'); i++) {
     await new Promise((done) => setTimeout(done, 200));

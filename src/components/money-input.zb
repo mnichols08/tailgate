@@ -1,0 +1,49 @@
+<!--
+  An amount of money. Typing is free-form; on blur it's formatted (`1234.5` → `1,234.50`). The
+  value is a number (or null when empty). A form control: `required` and `min` validate it.
+  @fires valuechange - The amount changed; `detail` is the number, or null.
+-->
+<script>
+  import { validity } from '@zubra/runtime'
+
+  const format = (amount) => (amount == null ? "" : amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+  let text = format(value)
+  let focused = false
+  // Typed text that isn't an amount ("12 dollars", "1e5") is kept on screen with a message,
+  // rather than quietly changed into some other number.
+  let bad = false
+  const shown = focused || bad ? text : format(value)
+
+  validity(() => (bad ? "Enter an amount, like 12.50" : required && value == null ? "Enter an amount" : value != null && value < min ? `At least ${format(min)}` : ""))
+
+  function input(event) {
+    text = event.target.value
+    // Spaces, thousands separators and currency signs are fine; anything else isn't an amount.
+    const cleaned = text.replace(/[\s,$€£¥]/g, "").split(symbol).join("")
+    const number = /^-?(\d+\.?\d*|\.\d+)$/.test(cleaned) ? Number(cleaned) : NaN
+    bad = cleaned !== "" && !Number.isFinite(number)
+    const next = cleaned === "" || bad ? null : Math.round(number * 100) / 100
+    if (next === value) return
+    value = next
+  }
+  // While focused the text is left as typed; on blur it's formatted again.
+  function focus() {
+    if (!bad) text = format(value)
+    focused = true
+  }
+</script>
+<style>
+  :host { display: block; }
+  .box { display: flex; align-items: center; border: 1px solid var(--border, #d9dce3); border-radius: calc(var(--radius, 0.625rem) * 0.96); background: var(--card, #ffffff); }
+  .box:focus-within { outline: 2px solid var(--primary, #4f5df5); outline-offset: 1px; }
+  span { padding-left: 0.7rem; color: var(--muted-foreground, #667085); font-weight: 600; }
+  .error { margin: 0.35rem 0 0; color: var(--destructive, #d92d20); font-size: 0.875rem; }
+  input { flex: 1; min-width: 0; padding: 0.55rem 0.7rem 0.55rem 0.3rem; border: 0; outline: 0; background: none; font: inherit; font-variant-numeric: tabular-nums; color: inherit; text-align: right; }
+</style>
+<money-input form-associated value:model={null} symbol="$" required={false} min={0} label="Amount">
+  <div class="box">
+    <span aria-hidden="true">{symbol}</span>
+    <input inputmode="decimal" autocomplete="off" aria-label={label} aria-invalid={bad ? "true" : "false"} placeholder="0.00" value={shown} oninput={input} onfocus={focus} onblur={() => (focused = false)}>
+  </div>
+  <p class="error" aria-live="polite">{bad ? "Enter an amount, like 12.50" : ""}</p>
+</money-input>

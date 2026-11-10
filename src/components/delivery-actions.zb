@@ -4,6 +4,9 @@
   Claim at once get one winner and one message.
 -->
 <script>
+  import './action-button.zb'
+  import './alert-banner.zb'
+
   let problem = ''
 
   export async function claim(formData, context) {
@@ -31,31 +34,29 @@
 </script>
 <style>
   form { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
-  button { font: inherit; font-weight: 600; padding: 0.55rem 1.1rem; border: 0; border-radius: 0.6rem; background: var(--accent, #3f7d3a); color: white; cursor: pointer; }
-  form[aria-busy="true"] button { opacity: 0.5; }
-  .problem { margin: 0; color: #a5361f; font-size: 0.9rem; }
+  alert-banner { flex-basis: 100%; }
 </style>
 <delivery-actions order="" stage="placed">
   <zb-switch value={stage}>
     <zb-case is="placed">
       <form action={claim} onaction={show}>
         <input type="hidden" name="order" value={order}>
-        <button>Claim delivery</button>
-        <p class="problem" role="alert" zb-if={problem}>{problem}</p>
+        <action-button type="submit">Claim delivery</action-button>
+        <alert-banner zb-if={problem} variant="danger">{problem}</alert-banner>
       </form>
     </zb-case>
     <zb-case is="claimed">
       <form action={pickUp} onaction={show}>
         <input type="hidden" name="order" value={order}>
-        <button>Picked up</button>
-        <p class="problem" role="alert" zb-if={problem}>{problem}</p>
+        <action-button type="submit">Picked up</action-button>
+        <alert-banner zb-if={problem} variant="danger">{problem}</alert-banner>
       </form>
     </zb-case>
     <zb-case is="picked">
       <form action={deliver} onaction={show}>
         <input type="hidden" name="order" value={order}>
-        <button>Delivered</button>
-        <p class="problem" role="alert" zb-if={problem}>{problem}</p>
+        <action-button type="submit">Delivered</action-button>
+        <alert-banner zb-if={problem} variant="danger">{problem}</alert-banner>
       </form>
     </zb-case>
   </zb-switch>

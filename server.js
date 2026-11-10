@@ -6,6 +6,7 @@
 // - Anything two people could both want (ordering the last crate, claiming a delivery) is a
 //   'use server' function (@zubra/actions): a plain form post, with or without JavaScript.
 import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createZubra } from '@zubra/server';
@@ -15,7 +16,7 @@ import { sessions } from './src/session.js';
 import { layout, escape } from './src/layout.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const components = join(here, 'components');
+const components = join(here, 'src', 'components');
 
 export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailgate.db'), cache = true, secret = process.env.SESSION_SECRET } = {}) {
   if (!secret) {
@@ -41,8 +42,17 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
     // Without JavaScript, an action's error comes back once in a cookie; show it on the page.
     const result = actions.result(req, (name, value) => res.setHeader(name, value));
     const problem = result?.value?.error ?? (result?.error ? 'Something went wrong. Try again.' : '');
-    send(res, 200, page.finish(layout({ title, path, person, people: market.people, problem, body, actionsScript: actions.script() })));
+    const banner = problem ? page.render('alert-banner', { variant: 'danger' }, { default: escape(problem) }) : '';
+    send(res, 200, page.finish(layout({ title, path, person, people: market.people, banner, body, actionsScript: actions.script() })));
   }
+
+  // Zubra UI's theme (installed by `npx shadcn add`), served as two stylesheets.
+  const styles = {
+    '/styles/theme.css': readFileSync(join(components, 'zubra', 'theme.css')),
+    '/styles/paper.css': readFileSync(join(components, 'zubra', 'themes', 'paper.css')),
+  };
+  /** An empty list: Zubra UI's empty-state, with an optional link as its action. */
+  const empty = (p, heading, line, action = '') => p.render('empty-state', { heading }, { default: escape(line), ...(action ? { actions: action } : {}) });
 
   const needs = (role, person) => person?.role === role;
   const ask = (role) =>
@@ -53,6 +63,10 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
       if (await market.sync.handle(req, res)) return;
       if (await actions.handle(req, res)) return;
       if (zubra.handle(req, res)) return;
+      if (styles[req.url]) {
+        res.writeHead(200, { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=3600' });
+        return res.end(styles[req.url]);
+      }
 
       const url = new URL(req.url, 'http://localhost');
       const person = session.read(req.headers.cookie ?? '');
@@ -86,7 +100,7 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
           path: '/',
           person,
           page: p,
-          body: `<section><h1>What's fresh today</h1>${hint}<div class="grid">${cards || '<p class="hint">Nothing is listed right now.</p>'}</div></section>`,
+          body: `<section><h1>What's fresh today</h1>${hint}<div class="grid">${cards || empty(p, 'Nothing for sale right now', 'Farmers add what they have from their Farm page.')}</div></section>`,
         });
       }
 
@@ -101,7 +115,7 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
           body: `<section><h1>${escape(market.farmName(person.farm))}: your stock</h1>
 <p class="hint">Edits save on this device first and reach the market when you're online.</p>
 ${p.render('farm-stock', { doc: person.farm })}</section>
-<section><h2>Orders for your farm</h2><div class="stack">${incoming || '<p class="hint">No orders yet.</p>'}</div></section>`,
+<section><h2>Orders for your farm</h2><div class="stack">${incoming || empty(p, 'No orders yet', 'Orders for your farm appear here as customers place them.')}</div></section>`,
         });
       }
 
@@ -113,7 +127,7 @@ ${p.render('farm-stock', { doc: person.farm })}</section>
           path: '/orders',
           person,
           page: p,
-          body: `<section><h1>Your orders</h1><p class="hint">Delivering to ${escape(person.address)}. Pay on delivery.</p><div class="stack">${mine || '<p class="hint">No orders yet. <a href="/">Go to the market.</a></p>'}</div></section>`,
+          body: `<section><h1>Your orders</h1><p class="hint">Delivering to ${escape(person.address)}. Pay on delivery.</p><div class="stack">${mine || empty(p, 'No orders yet', 'Order something fresh from a farm near you.', p.render('action-button', { href: '/' }, { default: 'Go to the market' }))}</div></section>`,
         });
       }
 
@@ -130,8 +144,8 @@ ${p.render('farm-stock', { doc: person.farm })}</section>
           path: '/drive',
           person,
           page: p,
-          body: `<section><h1>Your deliveries</h1><div class="stack">${mine || '<p class="hint">None right now. Claim one below.</p>'}</div></section>
-<section><h2>Open deliveries</h2><div class="stack">${open || '<p class="hint">Nothing waiting.</p>'}</div></section>`,
+          body: `<section><h1>Your deliveries</h1><div class="stack">${mine || empty(p, 'No deliveries yet', 'Claim an open delivery below.')}</div></section>
+<section><h2>Open deliveries</h2><div class="stack">${open || empty(p, 'Nothing waiting', 'New orders appear here for any driver to claim.')}</div></section>`,
         });
       }
 

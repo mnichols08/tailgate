@@ -1,0 +1,25 @@
+<!--
+  A number with − and + buttons, between `min` and `max`. A form control.
+  @fires valuechange - The value changed; `detail` is the new value.
+-->
+<script>
+  // A value set from code is shown clamped to min..max (and a non-number as min).
+  const shown = Number.isFinite(Number(value)) ? Math.min(max, Math.max(min, Number(value))) : min
+  function step(by) {
+    const next = Math.min(max, Math.max(min, shown + by))
+    if (next === value) return
+    value = next
+  }
+</script>
+<style>
+  :host { display: inline-flex; align-items: center; gap: 0.5rem; }
+  button { width: 2.25rem; height: 2.25rem; border-radius: 50%; border: 1px solid var(--border, #ccd); background: var(--card, #fff); font: inherit; font-size: 1.125rem; cursor: pointer; }
+  /* aria-disabled, not disabled: a disabled button would drop keyboard focus at the limit. */
+  button[aria-disabled=true] { opacity: 0.5; cursor: default; }
+  output { min-width: 2ch; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+</style>
+<quantity-stepper form-associated value:model={1} min={0} max={10} label="Quantity">
+  <button type="button" class="less" aria-label={`Fewer ${label}`} aria-disabled={shown <= min ? "true" : "false"} onclick={() => step(-1)}>−</button>
+  <output aria-live="polite" aria-label={label}>{shown}</output>
+  <button type="button" class="more" aria-label={`More ${label}`} aria-disabled={shown >= max ? "true" : "false"} onclick={() => step(1)}>+</button>
+</quantity-stepper>

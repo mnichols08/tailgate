@@ -12,6 +12,7 @@ Tailgate is a showcase for [Zubra](https://github.com/journey-to-code-org/zubra)
 | `@zubra/sync` | A farmer's stock lives on their device first, so it can be edited in a field with no signal and syncs on reconnect. Every order's status is a live document, so the customer sees "Driver assigned", "On the way" and "Delivered" without reloading |
 | Presence (`@zubra/sync`) | The customer sees when the driver is looking at their order |
 | `@zubra/actions` | Ordering, claiming a delivery, picking up and delivering are plain form posts to `'use server'` functions. They work with JavaScript off, and their code never reaches the browser |
+| [Zubra UI](https://github.com/journey-to-code-org/zubra-ui) | Every control: quantity stepper, money input, step indicator, buttons, alerts and empty states, themed with Zubra UI's Paper theme in Tailgate's green |
 
 The rule behind the split: **Sync for what one person owns, Actions for what two people could both want.** A farmer's price is theirs alone, so last-writer-wins is right. The last crate of squash, or a delivery two drivers tap at once, has to be decided by the server, so it is an action.
 
@@ -20,6 +21,18 @@ The rule behind the split: **Sync for what one person owns, Actions for what two
 One SQLite file holds the Sync log. `src/market.js` wraps that log, so every change a device pushes is also applied to the server's view of each document. The server therefore always knows current stock and order status, and needs no second table.
 
 When the server has to decide something, it checks and writes in one synchronous step, so two requests can't interleave. It then pushes its write into the same log, which sends it to every open page. Only the server may write `orders`. Each farmer may write only their own farm's stock.
+
+## Zubra UI
+
+The controls are Zubra UI components, installed as `.zb` source with the shadcn CLI into `src/components/`, beside Tailgate's own. Nothing comes from npm:
+
+```sh
+R=https://journey-to-code-org.github.io/zubra-ui/r
+npx shadcn add $R/src/quantity-stepper.json $R/src/money-input.json $R/src/step-indicator.json \
+  $R/src/action-button.json $R/src/alert-banner.json $R/src/empty-state.json $R/theme.json $R/themes/paper.json
+```
+
+Add another the same way, then import it from the component that uses it (`import './modal-dialog.zb'`).
 
 ## Run it
 

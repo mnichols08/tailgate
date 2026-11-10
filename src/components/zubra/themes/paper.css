@@ -1,0 +1,67 @@
+/* Paper: Warm and editorial: a book page, a serif, unhurried motion. */
+
+[data-theme="paper"] {
+  --background: oklch(0.975 0.012 85);
+  --foreground: oklch(0.25 0.03 55);
+  --card: oklch(0.99 0.008 85);
+  --card-foreground: oklch(0.25 0.03 55);
+  --popover: oklch(0.99 0.008 85);
+  --popover-foreground: oklch(0.25 0.03 55);
+  --primary: oklch(0.5 0.15 40);
+  --primary-foreground: oklch(0.985 0.01 85);
+  --secondary: oklch(0.93 0.02 80);
+  --secondary-foreground: oklch(0.25 0.03 55);
+  --muted: oklch(0.93 0.02 80);
+  --muted-foreground: oklch(0.45 0.03 60);
+  --accent: oklch(0.92 0.03 75);
+  --accent-foreground: oklch(0.25 0.03 55);
+  --destructive: oklch(0.5 0.19 27);
+  --border: oklch(0.86 0.025 80);
+  --input: oklch(0.78 0.03 80);
+  --ring: oklch(0.6 0.12 45);
+  --chart-1: oklch(0.55 0.15 40);
+  --chart-2: oklch(0.55 0.08 150);
+  --chart-3: oklch(0.62 0.1 80);
+  --radius: 0.35rem;
+  --duration-fast: 180ms;
+  --duration-normal: 260ms;
+  --duration-slow: 520ms;
+  --ease-out: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --heading-weight: 600;
+  --font-body: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --font-heading: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  color-scheme: light;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+}
+
+.dark [data-theme="paper"], [data-theme="paper"].dark {
+  --background: oklch(0.2 0.015 60);
+  --foreground: oklch(0.93 0.02 85);
+  --card: oklch(0.24 0.018 60);
+  --card-foreground: oklch(0.93 0.02 85);
+  --popover: oklch(0.24 0.018 60);
+  --popover-foreground: oklch(0.93 0.02 85);
+  --primary: oklch(0.74 0.13 50);
+  --primary-foreground: oklch(0.2 0.02 60);
+  --secondary: oklch(0.3 0.02 60);
+  --secondary-foreground: oklch(0.93 0.02 85);
+  --muted: oklch(0.3 0.02 60);
+  --muted-foreground: oklch(0.76 0.03 80);
+  --accent: oklch(0.32 0.025 60);
+  --accent-foreground: oklch(0.93 0.02 85);
+  --destructive: oklch(0.68 0.18 25);
+  --border: oklch(0.35 0.02 60);
+  --input: oklch(0.42 0.02 60);
+  --ring: oklch(0.65 0.1 50);
+  --chart-1: oklch(0.74 0.13 50);
+  --chart-2: oklch(0.7 0.08 150);
+  --chart-3: oklch(0.78 0.1 85);
+  color-scheme: dark;
+}
+
+[data-theme="paper"] :is(h1, h2, h3, h4) {
+  font-family: var(--font-heading);
+  font-weight: 600;
+}

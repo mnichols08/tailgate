@@ -7,6 +7,7 @@
 <script>
   'use collection farms'
   import './stock-item.zb'
+  import './action-button.zb'
 
   let items = []
 
@@ -18,9 +19,9 @@
 </script>
 <style>
   section { display: grid; gap: 0.6rem; }
-  .head { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 0.5rem; font-size: 0.8rem; color: var(--muted, #6b6457); padding: 0 0.2rem; }
-  button.add { justify-self: start; font: inherit; font-weight: 600; padding: 0.5rem 1rem; border: 1px dashed var(--accent, #3f7d3a); border-radius: 0.6rem; background: transparent; color: var(--accent, #3f7d3a); cursor: pointer; }
-  .empty { color: var(--muted, #6b6457); }
+  .head { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 0.5rem; font-size: 0.8rem; color: var(--muted-foreground); padding: 0 0.2rem; }
+  action-button { justify-self: start; }
+  .empty { color: var(--muted-foreground); }
 </style>
 <farm-stock doc="">
   <section>
@@ -29,6 +30,6 @@
       <stock-item farm={doc} item={id} onremove={remove}></stock-item>
     </zb-each>
     <p class="empty" zb-if={items.length === 0}>Nothing listed yet.</p>
-    <button type="button" class="add" onclick={add}>Add an item</button>
+    <action-button class="add" variant="outline" onclick={add}>Add an item</action-button>
   </section>
 </farm-stock>

@@ -9,26 +9,31 @@ const NAV = [
   ['/drive', 'Drive'],
 ];
 
-export function layout({ title, path, person, people, problem, body, actionsScript }) {
+export function layout({ title, path, person, people, banner, body, actionsScript }) {
   const options = Object.values(people)
     .map((p) => `<option value="${p.id}"${person?.id === p.id ? ' selected' : ''}>${escape(p.name)} · ${p.role}</option>`)
     .join('');
   return `<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="paper">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escape(title)} · Tailgate</title>
   <meta name="description" content="Farm to door: local farmers, neighbours and drivers. A Zubra showcase.">
+  <link rel="stylesheet" href="/styles/theme.css">
+  <link rel="stylesheet" href="/styles/paper.css">
   <style>
-    :root { --ink: #23201a; --muted: #6b6457; --line: #d9d4c7; --card: #fffdf8; --paper: #f5f1e6; --accent: #3f7d3a; color-scheme: light; }
+    /* Zubra UI's Paper theme, with Tailgate's green as its primary colour. */
+    [data-theme="paper"] { --primary: oklch(0.48 0.11 140); --ring: oklch(0.48 0.11 140); }
+    :root { --ink: var(--foreground); --muted: var(--muted-foreground); --line: var(--border); --paper: var(--background); --accent: var(--primary); color-scheme: light; }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--ink); background: var(--paper); line-height: 1.45; }
+    body { margin: 0; font-family: var(--font-body, ui-sans-serif, system-ui, sans-serif); color: var(--ink); background: var(--paper); line-height: 1.45; }
+    h1, h2, .brand { font-family: var(--font-heading, var(--font-serif, inherit)); }
     .bar { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; align-items: center; padding: 0.8rem 1.25rem; background: var(--ink); color: var(--paper); }
     .brand { font-weight: 800; letter-spacing: 0.02em; color: var(--paper); text-decoration: none; font-size: 1.15rem; }
-    nav { display: flex; gap: 1rem; }
-    nav a { color: #e6dfcd; text-decoration: none; }
-    nav a[aria-current] { color: white; font-weight: 700; text-decoration: underline; text-underline-offset: 0.3em; }
+    .bar nav { display: flex; gap: 1rem; }
+    .bar nav a { color: #e6dfcd; text-decoration: none; }
+    .bar nav a[aria-current] { color: white; font-weight: 700; text-decoration: underline; text-underline-offset: 0.3em; }
     .who { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; font-size: 0.9rem; }
     .who select, .who button { font: inherit; padding: 0.3rem 0.5rem; border-radius: 0.4rem; border: 1px solid #5b5447; }
     main { max-width: 64rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; display: grid; gap: 2rem; }
@@ -55,7 +60,7 @@ export function layout({ title, path, person, people, problem, body, actionsScri
     </form>
   </header>
   <main>
-    ${problem ? `<p class="problem" role="alert">${escape(problem)}</p>` : ''}
+    ${banner}
     ${body}
   </main>
   <footer>A <a href="https://github.com/journey-to-code-org/zubra">Zubra</a> showcase by <a href="https://potomac.solutions">Potomac Solutions</a>. Demo data; pay on delivery.</footer>

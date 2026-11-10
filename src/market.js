@@ -178,7 +178,8 @@ export async function createMarket({ db = ':memory:' } = {}) {
       if (person?.role !== 'customer') return { error: 'Choose a customer to order.' };
       const farm = String(formData.get('farm') ?? '');
       const item = String(formData.get('item') ?? '');
-      const qty = Number(formData.get('qty'));
+      // `qtyFallback` is the order form's no-JavaScript stand-in for the quantity stepper.
+      const qty = Number(formData.get('qty') ?? formData.get('qtyFallback'));
       if (!Number.isInteger(qty) || qty < 1 || qty > 100) return { error: 'Choose how many, from 1 to 100.' };
       const listed = (docs.get('farms', farm)?.items ?? []).includes(item);
       const listing = docs.get('listings', `${farm}/${item}`);
