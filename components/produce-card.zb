@@ -1,0 +1,41 @@
+<!--
+  One thing for sale, with its order form. The catalog is rendered by the server from what every
+  farm has listed; ordering posts to a 'use server' function that checks the stock and takes it
+  in one step, so the last crate goes to one customer.
+-->
+<script>
+  let problem = ''
+
+  export async function order(formData, context) {
+    'use server'
+    const done = await context.market.placeOrder(context.person, formData)
+    if (done.error) return done
+    return Response.redirect(new URL('/orders', context.request.url), 303)
+  }
+</script>
+<style>
+  article { border: 1px solid var(--line, #d9d4c7); border-radius: 0.9rem; padding: 1rem 1.1rem; background: var(--card, #fffdf8); display: grid; gap: 0.5rem; align-content: start; }
+  h3 { margin: 0; font-size: 1.1rem; }
+  .farm, .left { margin: 0; color: var(--muted, #6b6457); font-size: 0.9rem; }
+  .price { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+  form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  input { font: inherit; width: 4.5rem; padding: 0.45rem 0.5rem; border: 1px solid var(--line, #d9d4c7); border-radius: 0.5rem; }
+  button { font: inherit; font-weight: 600; padding: 0.5rem 1rem; border: 0; border-radius: 0.6rem; background: var(--accent, #3f7d3a); color: white; cursor: pointer; }
+  form[aria-busy="true"] button { opacity: 0.5; }
+  .problem { margin: 0; flex-basis: 100%; color: #a5361f; font-size: 0.9rem; }
+</style>
+<produce-card farm="" item="" name="" unit="" price="" qty={0} farm-name="" can-order={false}>
+  <article>
+    <h3>{name}</h3>
+    <p class="farm">{farmName}</p>
+    <p class="price">{price} / {unit}</p>
+    <p class="left">{qty} left</p>
+    <form zb-if={canOrder} action={order} onaction={(event) => (problem = event.detail.value?.error ?? event.detail.error ?? '')}>
+      <input type="hidden" name="farm" value={farm}>
+      <input type="hidden" name="item" value={item}>
+      <label>Qty <input type="number" name="qty" value="1" min="1" max={qty} required></label>
+      <button>Order</button>
+      <p class="problem" role="alert" zb-if={problem}>{problem}</p>
+    </form>
+  </article>
+</produce-card>

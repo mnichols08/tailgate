@@ -1,0 +1,34 @@
+<!--
+  A farm's list of what it sells. The list itself is a Sync document ('use collection farms',
+  keyed by `doc`, the farm), and each row is its own document (`stock-item`). Everything is
+  written on the farmer's device first, so it works in a field with no signal, and reaches the
+  market when the phone is back online.
+-->
+<script>
+  'use collection farms'
+  import './stock-item.zb'
+
+  let items = []
+
+  const add = () => items.push(`i${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`)
+  const remove = (event) => {
+    const at = items.indexOf(event.detail)
+    if (at >= 0) items.splice(at, 1)
+  }
+</script>
+<style>
+  section { display: grid; gap: 0.6rem; }
+  .head { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 0.5rem; font-size: 0.8rem; color: var(--muted, #6b6457); padding: 0 0.2rem; }
+  button.add { justify-self: start; font: inherit; font-weight: 600; padding: 0.5rem 1rem; border: 1px dashed var(--accent, #3f7d3a); border-radius: 0.6rem; background: transparent; color: var(--accent, #3f7d3a); cursor: pointer; }
+  .empty { color: var(--muted, #6b6457); }
+</style>
+<farm-stock doc="">
+  <section>
+    <div class="head" aria-hidden="true"><span>Item</span><span>Unit</span><span>Price ($)</span><span>Qty</span><span></span></div>
+    <zb-each items={items} as="id" key={id}>
+      <stock-item farm={doc} item={id} onremove={remove}></stock-item>
+    </zb-each>
+    <p class="empty" zb-if={items.length === 0}>Nothing listed yet.</p>
+    <button type="button" class="add" onclick={add}>Add an item</button>
+  </section>
+</farm-stock>

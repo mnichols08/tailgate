@@ -1,0 +1,25 @@
+{
+  "name": "tailgate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Farm to door: farmers list what they have, customers order it, drivers carry it. A Zubra showcase on one small Node server.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/app.test.js"
+  },
+  "dependencies": {
+    "@zubra/actions": "5.4.1",
+    "@zubra/compiler": "5.4.1",
+    "@zubra/runtime": "5.4.1",
+    "@zubra/server": "5.4.1",
+    "@zubra/sync": "5.4.1"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

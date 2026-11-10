@@ -1,0 +1,62 @@
+<!--
+  What a driver can do to one order, as plain forms. Each posts to a 'use server' function: a
+  native post without JavaScript, a fetch with it. The server decides, so two drivers pressing
+  Claim at once get one winner and one message.
+-->
+<script>
+  let problem = ''
+
+  export async function claim(formData, context) {
+    'use server'
+    const done = await context.market.claim(context.person, formData)
+    if (done.error) return done
+    return Response.redirect(new URL('/drive', context.request.url), 303)
+  }
+
+  export async function pickUp(formData, context) {
+    'use server'
+    const done = await context.market.advance(context.person, formData, 'picked')
+    if (done.error) return done
+    return Response.redirect(new URL('/drive', context.request.url), 303)
+  }
+
+  export async function deliver(formData, context) {
+    'use server'
+    const done = await context.market.advance(context.person, formData, 'delivered')
+    if (done.error) return done
+    return Response.redirect(new URL('/drive', context.request.url), 303)
+  }
+
+  const show = (event) => (problem = event.detail.value?.error ?? event.detail.error ?? '')
+</script>
+<style>
+  form { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+  button { font: inherit; font-weight: 600; padding: 0.55rem 1.1rem; border: 0; border-radius: 0.6rem; background: var(--accent, #3f7d3a); color: white; cursor: pointer; }
+  form[aria-busy="true"] button { opacity: 0.5; }
+  .problem { margin: 0; color: #a5361f; font-size: 0.9rem; }
+</style>
+<delivery-actions order="" stage="placed">
+  <zb-switch value={stage}>
+    <zb-case is="placed">
+      <form action={claim} onaction={show}>
+        <input type="hidden" name="order" value={order}>
+        <button>Claim delivery</button>
+        <p class="problem" role="alert" zb-if={problem}>{problem}</p>
+      </form>
+    </zb-case>
+    <zb-case is="claimed">
+      <form action={pickUp} onaction={show}>
+        <input type="hidden" name="order" value={order}>
+        <button>Picked up</button>
+        <p class="problem" role="alert" zb-if={problem}>{problem}</p>
+      </form>
+    </zb-case>
+    <zb-case is="picked">
+      <form action={deliver} onaction={show}>
+        <input type="hidden" name="order" value={order}>
+        <button>Delivered</button>
+        <p class="problem" role="alert" zb-if={problem}>{problem}</p>
+      </form>
+    </zb-case>
+  </zb-switch>
+</delivery-actions>

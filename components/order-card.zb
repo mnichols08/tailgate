@@ -1,0 +1,53 @@
+<!--
+  One order, live. Its status and driver are a Sync document ('use collection orders', keyed by
+  `doc`) that only the server writes: when a driver claims it, picks it up or delivers it, every
+  page showing the order follows without a reload. The server HTML already has the status
+  (`status-now`); the element takes over from the document once it loads.
+
+  Who is looking at the order is presence: shared live between the people on it, never stored.
+-->
+<script>
+  'use collection orders'
+  import { from } from '@zubra/runtime'
+  import { presence, peers } from '@zubra/sync'
+
+  let status = from(statusNow)
+  let driverName = from(driverNow)
+  let looking = presence(viewer)
+  let others = peers()
+
+  const steps = ['placed', 'claimed', 'picked', 'delivered']
+  const labels = { placed: 'Placed', claimed: 'Driver assigned', picked: 'On the way', delivered: 'Delivered' }
+  const reached = steps.indexOf(status)
+  const watching = others.filter((other) => other.looking && other.looking !== viewer).map((other) => other.looking)
+  const driverHere = watching.includes('driver')
+</script>
+<style>
+  article { border: 1px solid var(--line, #d9d4c7); border-radius: 0.9rem; padding: 1rem 1.1rem; background: var(--card, #fffdf8); display: grid; gap: 0.6rem; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  h3 { margin: 0; font-size: 1.05rem; }
+  .total { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .meta { margin: 0; color: var(--muted, #6b6457); font-size: 0.9rem; }
+  ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem; }
+  li { font-size: 0.78rem; padding-top: 0.45rem; border-top: 4px solid var(--line, #d9d4c7); color: var(--muted, #6b6457); transition: border-color 0.4s, color 0.4s; }
+  li.done { border-color: var(--accent, #3f7d3a); color: var(--ink, #23201a); }
+  li.now { font-weight: 700; }
+  .live { margin: 0; font-size: 0.85rem; color: var(--accent, #3f7d3a); }
+  .live { transition: opacity 0.3s; @starting-style { opacity: 0; } }
+</style>
+<order-card doc="" item-name="" qty={0} unit="" total="" farm-name="" customer-name="" address="" status-now="placed" driver-now="" viewer="customer">
+  <article>
+    <header>
+      <h3>{qty} {unit} · {itemName}</h3>
+      <span class="total">{total}</span>
+    </header>
+    <p class="meta">From {farmName} to {customerName}, {address}</p>
+    <ol aria-label="Order status">
+      <zb-each items={steps} as="step" index="i" key={step}>
+        <li class:done={i <= reached} class:now={i === reached} aria-current={i === reached ? 'step' : null}>{labels[step]}</li>
+      </zb-each>
+    </ol>
+    <p class="meta" zb-if={driverName}>Driver: {driverName}</p>
+    <p class="live" zb-if={driverHere && status !== 'delivered'}>{driverName || 'The driver'} is looking at this order now</p>
+  </article>
+</order-card>
