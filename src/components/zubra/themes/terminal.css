@@ -1,0 +1,72 @@
+/* Terminal: Dark-first and monospaced: square corners, phosphor green, instant motion. */
+
+[data-theme="terminal"] {
+  --background: oklch(0.17 0.01 160);
+  --foreground: oklch(0.9 0.08 150);
+  --card: oklch(0.2 0.015 160);
+  --card-foreground: oklch(0.9 0.08 150);
+  --popover: oklch(0.2 0.015 160);
+  --popover-foreground: oklch(0.9 0.08 150);
+  --primary: oklch(0.82 0.18 150);
+  --primary-foreground: oklch(0.17 0.01 160);
+  --secondary: oklch(0.26 0.02 160);
+  --secondary-foreground: oklch(0.9 0.08 150);
+  --muted: oklch(0.26 0.02 160);
+  --muted-foreground: oklch(0.74 0.06 150);
+  --accent: oklch(0.28 0.03 160);
+  --accent-foreground: oklch(0.9 0.08 150);
+  --destructive: oklch(0.7 0.19 25);
+  --border: oklch(0.36 0.04 155);
+  --input: oklch(0.42 0.05 155);
+  --ring: oklch(0.82 0.18 150);
+  --chart-1: oklch(0.82 0.18 150);
+  --chart-2: oklch(0.82 0.13 85);
+  --chart-3: oklch(0.75 0.12 220);
+  --radius: 0px;
+  --duration-fast: 60ms;
+  --duration-normal: 100ms;
+  --duration-slow: 180ms;
+  --ease-out: cubic-bezier(0.3, 0, 0.2, 1);
+  --heading-weight: 700;
+  --font-body: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  --font-heading: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+}
+
+.light [data-theme="terminal"], [data-theme="terminal"].light {
+  --background: oklch(0.97 0.01 150);
+  --foreground: oklch(0.22 0.04 155);
+  --card: oklch(0.99 0.005 150);
+  --card-foreground: oklch(0.22 0.04 155);
+  --popover: oklch(0.99 0.005 150);
+  --popover-foreground: oklch(0.22 0.04 155);
+  --primary: oklch(0.45 0.13 150);
+  --primary-foreground: oklch(0.98 0.01 150);
+  --secondary: oklch(0.92 0.02 150);
+  --secondary-foreground: oklch(0.22 0.04 155);
+  --muted: oklch(0.92 0.02 150);
+  --muted-foreground: oklch(0.42 0.05 155);
+  --accent: oklch(0.9 0.04 150);
+  --accent-foreground: oklch(0.22 0.04 155);
+  --destructive: oklch(0.5 0.2 27);
+  --border: oklch(0.82 0.04 150);
+  --input: oklch(0.72 0.05 150);
+  --ring: oklch(0.45 0.13 150);
+  --chart-1: oklch(0.5 0.14 150);
+  --chart-2: oklch(0.6 0.13 85);
+  --chart-3: oklch(0.5 0.12 220);
+  color-scheme: light;
+}
+
+[data-theme="terminal"] :is(h1, h2, h3, h4) {
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+[data-theme="terminal"] :is(code, kbd, pre, samp) {
+  font-family: var(--font-mono);
+}

@@ -8,7 +8,10 @@
 // every open page follows.
 import { createSyncServer } from '@zubra/sync/server';
 import { sqliteLog } from '@zubra/sync/sqlite';
-import { people, farms as seedFarms, listings as seedListings } from './seed.js';
+import { people, farms as seedFarms, listings as seedListings, history, underway, DELIVERY_CENTS } from './seed.js';
+
+/** The Zubra UI theme presets a farm can dress its storefront in. */
+export const THEMES = ['paper', 'zinc', 'candy', 'midnight', 'terminal'];
 
 const pad = (number, width) => String(number).padStart(width, '0');
 
@@ -93,7 +96,7 @@ export async function createMarket({ db = ':memory:' } = {}) {
       // but it stores nothing. Anyone signed in may join; data writes follow the rules below.
       const path = new URL(request.url).pathname;
       if (path.endsWith('/presence') || path.endsWith('/signal')) return Boolean(person);
-      if (collection === 'farms') return person?.role === 'farmer' && person.farm === key;
+      if (collection === 'farms' || collection === 'brands') return person?.role === 'farmer' && person.farm === key;
       if (collection === 'listings') return person?.role === 'farmer' && key.startsWith(`${person.farm}/`);
       return false; // orders, and anything else, are the server's
     },
@@ -113,41 +116,85 @@ export async function createMarket({ db = ':memory:' } = {}) {
     if (!response?.ok) throw new Error(`The log refused a server write (${response?.status})`);
   }
 
-  // A fresh log gets the demo farms and their first listings.
+  // A fresh log gets the demo farms, their storefronts, first listings and three weeks of orders.
   if (!docs.all('farms').length) {
     for (const farm of seedFarms) {
       await write('farms', farm.id, { items: seedListings.filter((item) => item.farm === farm.id).map((item) => item.item) });
+      const { id, town, ...brand } = farm;
+      await write('brands', id, { ...brand, logo: '' });
     }
     for (const { farm, item, ...fields } of seedListings) await write('listings', `${farm}/${item}`, fields);
+    for (const { key, ...order } of [...history(), ...underway()]) await write('orders', key, order);
   }
 
-  const farmName = (id) => seedFarms.find((farm) => farm.id === id)?.name ?? id;
+  const seedFarm = (id) => seedFarms.find((farm) => farm.id === id);
   const personName = (id) => people[id]?.name ?? id;
 
+  /** A farm's storefront as its farmer last set it: name, tagline, colour, theme and logo. */
+  function brand(id) {
+    const base = seedFarm(id);
+    if (!base) return null;
+    const live = docs.get('brands', id) ?? {};
+    const pick = (field) => (typeof live[field] === 'string' && live[field].trim() ? live[field] : base[field] ?? '');
+    return {
+      farm: id,
+      town: base.town,
+      name: pick('name'),
+      tagline: pick('tagline'),
+      color: /^#[0-9a-f]{6}$/i.test(live.color ?? '') ? live.color : base.color,
+      theme: THEMES.includes(live.theme) ? live.theme : base.theme,
+      logo: typeof live.logo === 'string' && live.logo.startsWith('data:image/') ? live.logo : '',
+    };
+  }
+  const farmName = (id) => brand(id)?.name ?? id;
+
+  /**
+   * Logos are kept in the farm's Sync document as a small data URL, and served from
+   * `/logos/<farm>.webp`: pages never put a data URL in an `src` (Zubra refuses them).
+   * `?v=` changes with the picture, so a new logo shows at once.
+   */
+  const logoUrl = (id) => {
+    const logo = brand(id)?.logo;
+    return logo ? `/logos/${id}.webp?v=${logo.length}` : '';
+  };
+  function logoFile(id) {
+    const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(brand(id)?.logo ?? '');
+    return match ? { type: match[1], body: Buffer.from(match[2], 'base64') } : null;
+  }
+
+  const listingsOf = (farm) =>
+    (docs.get('farms', farm)?.items ?? []).map((item) => ({ farm, item, ...docs.get('listings', `${farm}/${item}`) }));
+
   /** What a customer can buy now: listings that are on a farm's list, named, priced and in stock. */
-  function catalog() {
-    return seedFarms.flatMap((farm) =>
-      (docs.get('farms', farm.id)?.items ?? [])
-        .map((item) => ({ farm: farm.id, item, ...docs.get('listings', `${farm.id}/${item}`) }))
-        .filter((listing) => String(listing.name ?? '').trim() && Number(listing.price) > 0 && Number(listing.qty) > 0)
-        .map((listing) => ({
-          farm: listing.farm,
-          item: listing.item,
-          name: String(listing.name).trim(),
-          unit: String(listing.unit ?? 'each').trim() || 'each',
-          price: money(toCents(listing.price)),
-          qty: Math.floor(Number(listing.qty)),
-          farmName: farm.name,
-        })),
-    );
+  function catalog(only) {
+    return seedFarms
+      .filter((farm) => !only || farm.id === only)
+      .flatMap((farm) => {
+        const b = brand(farm.id);
+        return listingsOf(farm.id)
+          .filter((listing) => String(listing.name ?? '').trim() && Number(listing.price) > 0 && Number(listing.qty) > 0)
+          .map((listing) => ({
+            farm: listing.farm,
+            item: listing.item,
+            name: String(listing.name).trim(),
+            unit: String(listing.unit ?? 'each').trim() || 'each',
+            price: money(toCents(listing.price)),
+            qty: Math.floor(Number(listing.qty)),
+            farmName: b.name,
+            farmColor: b.color,
+            farmLogo: logoUrl(farm.id),
+          }));
+      });
   }
 
   const orderView = (order) => ({
     doc: order.key,
+    farm: order.farm,
     itemName: order.itemName,
     qty: order.qty,
     unit: order.unit,
-    total: money(order.cents),
+    total: money(order.cents + (order.fee ?? 0)),
+    goods: order.cents,
     farmName: farmName(order.farm),
     customerName: personName(order.customer),
     address: order.address,
@@ -158,12 +205,69 @@ export async function createMarket({ db = ':memory:' } = {}) {
   const newestFirst = (a, b) => b.placed - a.placed;
   const orders = (match) => docs.all('orders').filter(match).sort(newestFirst);
 
+  const DAY = 86_400_000;
+  const startOfDay = (time) => {
+    const date = new Date(time);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  };
+  const dayLabel = (time) => new Date(time).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const change = (now, before) => (before && now !== before ? Math.round(((now - before) / before) * 100) : null);
+
+  /** A farm's dashboard: sales, open orders, low stock, and where the money came from. */
+  function farmStats(farm, now = Date.now()) {
+    const mine = docs.all('orders').filter((order) => order.farm === farm);
+    const today = startOfDay(now);
+    const sum = (from, to) => mine.filter((o) => o.placed >= from && o.placed < to).reduce((total, o) => total + o.cents, 0);
+    const week = sum(today - 6 * DAY, today + DAY);
+    const before = sum(today - 13 * DAY, today - 6 * DAY);
+    const daily = Array.from({ length: 14 }, (_, i) => {
+      const from = today - (13 - i) * DAY;
+      return { label: dayLabel(from), value: sum(from, from + DAY) / 100 };
+    });
+    const byItem = new Map();
+    for (const order of mine.filter((o) => o.placed >= today - 29 * DAY)) byItem.set(order.itemName, (byItem.get(order.itemName) ?? 0) + order.cents / 100);
+    const stock = listingsOf(farm).filter((listing) => String(listing.name ?? '').trim());
+    return {
+      week: money(week),
+      weekChange: change(week, before),
+      open: mine.filter((o) => o.status !== 'delivered').length,
+      low: stock.filter((listing) => Number(listing.qty) <= 3),
+      daily,
+      byItem: [...byItem].sort((a, b) => b[1] - a[1]).map(([label, value], i) => ({ label, value: Math.round(value), tone: i % 8 })),
+    };
+  }
+
+  /** A driver's dashboard: deliveries and pay this week, and how many are waiting. */
+  function driverStats(person, now = Date.now()) {
+    const today = startOfDay(now);
+    const done = docs.all('orders').filter((o) => o.driver === person.id && o.status === 'delivered');
+    const count = (from, to) => done.filter((o) => (o.delivered ?? o.placed) >= from && (o.delivered ?? o.placed) < to).length;
+    const week = count(today - 6 * DAY, today + DAY);
+    const before = count(today - 13 * DAY, today - 6 * DAY);
+    return {
+      week,
+      weekChange: change(week, before),
+      earned: money(week * DELIVERY_CENTS),
+      open: docs.all('orders').filter((o) => o.status === 'placed' && !o.driver).length,
+      daily: Array.from({ length: 7 }, (_, i) => {
+        const from = today - (6 - i) * DAY;
+        return { label: new Date(from).toLocaleDateString('en-US', { weekday: 'short' }), value: count(from, from + DAY) };
+      }),
+    };
+  }
+
   return {
     sync,
     people,
     farms: seedFarms,
+    brand,
+    logoUrl,
+    logoFile,
     catalog,
     farmName,
+    farmStats,
+    driverStats,
     /** `who(request)` tells the Sync server who is writing (the session cookie). */
     identify(fn) {
       who = fn;
@@ -197,10 +301,12 @@ export async function createMarket({ db = ':memory:' } = {}) {
         unit: String(listing.unit ?? 'each'),
         qty,
         cents,
+        fee: DELIVERY_CENTS,
         customer: person.id,
         address: person.address,
         status: 'placed',
         driver: '',
+        driverName: '',
         placed: Date.now(),
       });
       await Promise.all([stock, order]);
@@ -225,7 +331,7 @@ export async function createMarket({ db = ':memory:' } = {}) {
       if (!order || order.driver !== person?.id) return { error: 'Only the driver on this delivery can update it.' };
       const from = { picked: 'claimed', delivered: 'picked' }[to];
       if (order.status !== from) return { error: `This order is ${order.status}.` };
-      await write('orders', key, { status: to });
+      await write('orders', key, to === 'delivered' ? { status: to, delivered: Date.now() } : { status: to });
       return { ok: true };
     },
 

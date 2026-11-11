@@ -1,0 +1,87 @@
+<!--
+  Short notifications that appear in a corner and go away by themselves. Put one region on the
+  page; anything (a framework, a plain script) shows a toast by dispatching an event, so nothing
+  needs a reference to it:
+  `document.dispatchEvent(new CustomEvent('toast', { detail: { message: 'Saved', variant: 'success' } }))`.
+  `detail` takes `message`, `heading`, `variant` (info, success, warning, danger), `duration` in
+  ms (0 keeps it until closed) and `action: { label, href }`. Toasts are announced politely (an
+  error assertively), wait while hovered or focused, close with Escape (the newest first), and show above dialogs (the top layer;
+  while a modal dialog is open the rest of the page is inert, so a toast's buttons work once it closes).
+  @fires toastclose - A toast closed; `detail` is its message.
+-->
+<script>
+  import { emit, onUnmount } from '@zubra/runtime'
+
+  let toasts = []
+  let region = null
+  let paused = false
+  let next = 1
+  const timers = new Map()
+
+  function remove(toast) {
+    clearTimeout(timers.get(toast.id))
+    timers.delete(toast.id)
+    toasts = toasts.filter((item) => item.id !== toast.id)
+    emit('toastclose', toast.message)
+  }
+  function schedule(toast) {
+    if (!toast.duration || paused) return
+    clearTimeout(timers.get(toast.id))
+    timers.set(toast.id, setTimeout(() => remove(toast), toast.duration))
+  }
+  function show(event) {
+    const detail = typeof event.detail === "string" ? { message: event.detail } : event.detail ?? {}
+    const toast = { id: next++, message: String(detail.message ?? ""), heading: detail.heading ?? "", variant: detail.variant ?? "info", duration: detail.duration ?? duration, action: detail.action ?? null }
+    // The same message again replaces the one showing, rather than stacking a copy.
+    toasts = [...toasts.filter((item) => item.message !== toast.message || item.heading !== toast.heading).slice(-(max - 1)), toast]
+    // In the top layer, so a toast shows above an open modal dialog.
+    if (region && !region.matches(":popover-open")) region.showPopover?.()
+    schedule(toast)
+  }
+  function pause(on) {
+    paused = on
+    if (on) { timers.forEach((timer) => clearTimeout(timer)); timers.clear() }
+    else toasts.forEach(schedule)
+  }
+  // Escape closes the newest toast, unless a dialog or menu is using it.
+  function escape(event) {
+    if (!toasts.length || event.defaultPrevented || document.querySelector("dialog:modal, :popover-open:not(section)")) return
+    remove(toasts[toasts.length - 1])
+  }
+  onUnmount(() => timers.forEach((timer) => clearTimeout(timer)))
+</script>
+<style>
+  :host { display: contents; }
+  .toast-region { position: fixed; inset: auto; margin: 0; padding: 1rem; border: 0; background: none; overflow: visible; display: grid; gap: 0.6rem; width: min(24rem, 100vw); box-sizing: border-box; pointer-events: none; }
+  .toast-region:not(:popover-open) { display: none; }
+  .toast-bottom-end { right: 0; bottom: 0; } .toast-bottom-start { left: 0; bottom: 0; } .toast-top-end { right: 0; top: 0; } .toast-top-start { left: 0; top: 0; }
+  .toast-bottom-center { left: 50%; bottom: 0; translate: -50% 0; } .toast-top-center { left: 50%; top: 0; translate: -50% 0; }
+  .toast-item { pointer-events: auto; display: grid; grid-template-columns: auto 1fr auto; gap: 0.15rem 0.7rem; align-items: start; padding: 0.85rem 0.9rem; border: 1px solid var(--border, #e4e4e7); border-radius: var(--radius, 0.625rem); background: var(--popover, #fff); color: var(--popover-foreground, #18181b); box-shadow: 0 10px 30px #0000001f; animation: enter var(--duration-normal, 200ms) var(--ease-out, ease-out); }
+  .toast-mark { width: 0.6rem; height: 0.6rem; margin-top: 0.4rem; border-radius: 50%; background: oklch(0.55 0.15 255); }
+  .toast-success .toast-mark { background: oklch(0.6 0.15 150); } .toast-warning .toast-mark { background: oklch(0.75 0.15 75); } .toast-danger .toast-mark { background: var(--destructive, #dc2626); }
+  .toast-content { display: grid; gap: 0.15rem; min-width: 0; }
+  strong:empty { display: none; }
+  .toast-message { color: color-mix(in oklab, var(--foreground, #18181b) 85%, var(--muted-foreground, #71717a)); }
+  .toast-action { justify-self: start; margin-top: 0.3rem; color: var(--primary, #18181b); font-weight: 600; }
+  .toast-close { width: 1.6rem; height: 1.6rem; margin: -0.2rem -0.3rem 0 0; border: 0; border-radius: 50%; background: none; color: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
+  .toast-close:hover { background: var(--accent, #f4f4f5); }
+  .toast-close:focus-visible, .toast-action:focus-visible { outline: 2px solid var(--ring, #a1a1aa); outline-offset: 1px; }
+  @keyframes enter { from { opacity: 0; transform: translateY(0.5rem) scale(0.98); } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; } }
+</style>
+<toast-region position="bottom-end" duration={5000} max={3} label="Notifications">
+  <zb-document ontoast={show} onkeydown.escape={escape}></zb-document>
+  <section ref={region} popover="manual" class="toast-region toast-{position}" aria-label={label} onmouseenter={() => pause(true)} onmouseleave={() => pause(false)} onfocusin={() => pause(true)} onfocusout={() => pause(false)}>
+    <zb-each items={toasts} as="toast" key={toast.id}>
+      <div class="toast-item toast-{toast.variant}" role={toast.variant === "danger" ? "alert" : "status"}>
+        <span class="toast-mark" aria-hidden="true"></span>
+        <div class="toast-content">
+          <strong>{toast.heading}</strong>
+          <span class="toast-message">{toast.message}</span>
+          <a zb-if={toast.action} class="toast-action" href={toast.action?.href}>{toast.action?.label}</a>
+        </div>
+        <button type="button" class="toast-close" aria-label="Dismiss notification" onclick={() => remove(toast)}>×</button>
+      </div>
+    </zb-each>
+  </section>
+</toast-region>

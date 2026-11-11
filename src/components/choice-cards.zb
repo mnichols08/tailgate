@@ -1,0 +1,48 @@
+<!--
+  Pick one of several cards: a radio group. A form control; arrow keys move the choice.
+  Each item is `{ id, title, detail, price, note }` (`note` and `price` optional).
+  @fires valuechange - The choice changed; `detail` is the chosen id.
+-->
+<script>
+  import { validity } from '@zubra/runtime'
+
+  let group = null
+  validity(() => (required && !value ? "Choose one" : ""))
+
+  function choose(item) {
+    if (item.disabled || item.id === value) return
+    value = item.id
+  }
+  function move(index, step) {
+    const enabled = items.filter((item) => !item.disabled)
+    const at = enabled.findIndex((item) => item.id === items[index].id)
+    const next = enabled[(at + step + enabled.length) % enabled.length]
+    choose(next)
+    queueMicrotask(() => group.querySelector(`[data-id="${next.id}"]`)?.focus())
+  }
+</script>
+<style>
+  :host { display: block; }
+  [role=radiogroup] { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.75rem; }
+  button { display: grid; gap: 0.25rem; text-align: left; padding: 0.9rem 1rem; border: 2px solid var(--border, #dde); border-radius: calc(var(--radius, 0.625rem) * 1.44); background: var(--card, #fff); color: inherit; font: inherit; cursor: pointer; transition: border-color var(--duration-fast, 150ms), box-shadow var(--duration-fast, 150ms); }
+  button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--primary, #36c) 50%, transparent); }
+  button[aria-checked=true] { border-color: var(--primary, #36c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #36c) 20%, transparent); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  strong { font-size: 1rem; }
+  .detail { font-size: 0.8125rem; color: var(--muted-foreground, #667); }
+  .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 0.35rem; }
+  .price { font-weight: 700; }
+  .note { font-size: 0.75rem; font-weight: 600; color: var(--primary, #36c); }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; } }
+</style>
+<choice-cards form-associated value:model="" items={[]} required={false} label="">
+  <div role="radiogroup" aria-label={label} ref={group}>
+  <zb-each items={items} as="item" index="index" key={item.id}>
+    <button type="button" role="radio" data-id={item.id} aria-checked={item.id === value ? "true" : "false"} tabindex={item.id === value || (!value && index === 0) ? "0" : "-1"} disabled={item.disabled ?? false} onclick={() => choose(item)} onkeydown.down.right.prevent={() => move(index, 1)} onkeydown.up.left.prevent={() => move(index, -1)}>
+      <strong>{item.title}</strong>
+      <span class="detail">{item.detail}</span>
+      <span class="row"><span class="note">{item.note ?? ""}</span><span class="price">{item.price ?? ""}</span></span>
+    </button>
+  </zb-each>
+  </div>
+</choice-cards>

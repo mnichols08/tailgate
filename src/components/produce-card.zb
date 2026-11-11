@@ -7,6 +7,8 @@
   import './quantity-stepper.zb'
   import './action-button.zb'
   import './alert-banner.zb'
+  import './user-avatar.zb'
+  import './status-badge.zb'
 
   let problem = ''
 
@@ -14,24 +16,32 @@
     'use server'
     const done = await context.market.placeOrder(context.person, formData)
     if (done.error) return done
-    return Response.redirect(new URL('/orders', context.request.url), 303)
+    return Response.redirect(new URL('/orders?done=placed', context.request.url), 303)
   }
+
+  const few = qty <= 3
 </script>
 <style>
-  article { border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); padding: 1rem 1.1rem; background: var(--card); display: grid; gap: 0.5rem; align-content: start; }
-  h3 { margin: 0; font-size: 1.1rem; }
-  .farm, .left { margin: 0; color: var(--muted-foreground); font-size: 0.9rem; }
-  .price { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
-  form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-  form { justify-content: space-between; }
+  article { height: 100%; display: grid; grid-template-rows: auto auto 1fr auto; gap: 0.4rem; padding: 1rem 1.1rem 1.1rem; border-radius: var(--radius); background: var(--card); box-shadow: 0 0 0 1px var(--border); border-top: 4px solid var(--farm, var(--primary)); }
+  .farm { display: flex; align-items: center; gap: 0.45rem; margin: 0; font-size: 0.875rem; color: var(--muted-foreground); text-decoration: none; }
+  .farm img { width: 1.5rem; height: 1.5rem; border-radius: 50%; object-fit: cover; }
+  .farm:hover { color: var(--farm, var(--foreground)); }
+  h3 { margin: 0; font-family: var(--font-heading, inherit); font-size: 1.35rem; line-height: 1.1; }
+  .price { margin: 0; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+  .price strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+  .price span { color: var(--muted-foreground); }
+  form { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 0.4rem; }
   alert-banner { flex-basis: 100%; }
+  .left { margin: 0; color: var(--muted-foreground); font-size: 0.9rem; }
 </style>
-<produce-card farm="" item="" name="" unit="" price="" qty={0} farm-name="" can-order={false}>
-  <article>
+<produce-card farm="" item="" name="" unit="" price="" qty={0} farm-name="" farm-color="" farm-logo="" show-farm={true} can-order={false}>
+  <article style={{ '--farm': farmColor || null }}>
+    <a zb-if={showFarm} class="farm" href={`/farms/${farm}`}>
+      <zb-if test={farmLogo}><img src={farmLogo} alt=""><zb-else><user-avatar name={farmName} size="sm"></user-avatar></zb-else></zb-if>
+      {farmName}
+    </a>
     <h3>{name}</h3>
-    <p class="farm">{farmName}</p>
-    <p class="price">{price} / {unit}</p>
-    <p class="left">{qty} left</p>
+    <p class="price"><strong>{price}</strong> <span>per {unit}</span> <status-badge zb-if={few} variant="warning">Only {qty} left</status-badge></p>
     <form zb-if={canOrder} action={order} onaction={(event) => (problem = event.detail.value?.error ?? event.detail.error ?? '')}>
       <input type="hidden" name="farm" value={farm}>
       <input type="hidden" name="item" value={item}>
@@ -42,5 +52,6 @@
       <action-button type="submit">Order</action-button>
       <alert-banner zb-if={problem} variant="danger">{problem}</alert-banner>
     </form>
+    <p zb-if={!canOrder} class="left">{qty} {unit === 'each' ? 'available' : `${unit}s available`}</p>
   </article>
 </produce-card>

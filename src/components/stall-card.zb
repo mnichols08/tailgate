@@ -1,0 +1,58 @@
+<!--
+  A farm's stall at the market: an awning in the farm's colour, its logo, name and tagline, all
+  in the Zubra UI theme the farmer chose. Purely what it's given; `farm-stall` keeps it live, and
+  the storefront editor uses it as its preview.
+-->
+<script>
+  import './user-avatar.zb'
+
+  // Colour comes from the farm; the theme sets everything else.
+  const hex = color || '#2e5e4e'
+</script>
+<style>
+  .stall { display: grid; grid-template-rows: auto 1fr; height: 100%; border-radius: var(--radius); background: var(--card); color: var(--card-foreground); text-decoration: none; overflow: hidden; box-shadow: 0 1px 0 var(--border), 0 0 0 1px var(--border); }
+  /* The awning: stripes in the farm's colour, scalloped along the bottom edge. */
+  .awning {
+    height: 3rem;
+    background: repeating-linear-gradient(90deg, var(--stall) 0 2.5rem, color-mix(in oklch, var(--stall) 18%, white) 2.5rem 5rem);
+    -webkit-mask: radial-gradient(1.25rem at 50% 0, #000 98%, #0000) 0 100% / 2.5rem 1.25rem repeat-x, linear-gradient(#000 0 0) top / 100% calc(100% - 1.25rem) no-repeat;
+    mask: radial-gradient(1.25rem at 50% 0, #000 98%, #0000) 0 100% / 2.5rem 1.25rem repeat-x, linear-gradient(#000 0 0) top / 100% calc(100% - 1.25rem) no-repeat;
+  }
+  .body { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem; align-content: start; padding: 0.75rem 1.25rem 1.25rem; }
+  .logo { grid-row: span 3; width: 4rem; height: 4rem; border-radius: 50%; object-fit: cover; background: var(--muted); box-shadow: 0 0 0 3px var(--card), 0 0 0 4px var(--border); }
+  user-avatar { grid-row: span 3; }
+  h3 { margin: 0; font-family: var(--font-heading, inherit); font-size: 1.6rem; line-height: 1.05; letter-spacing: -0.01em; color: var(--foreground); }
+  .tagline { margin: 0; color: var(--muted-foreground); line-height: 1.4; max-width: 34ch; }
+  .meta { margin: 0.25rem 0 0; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; font-size: 0.875rem; color: var(--muted-foreground); }
+  .meta strong { color: var(--stall); font-weight: 700; }
+  .banner .awning { height: 4.5rem; }
+  .banner .body { padding: 1rem 1.75rem 1.75rem; }
+  .banner h3 { font-size: clamp(2rem, 5vw, 3.25rem); }
+  .banner .logo { width: 6rem; height: 6rem; }
+  a.stall:hover h3 { text-decoration: underline; text-decoration-color: var(--stall); text-decoration-thickness: 3px; text-underline-offset: 0.2em; }
+  a.stall:focus-visible { outline: 3px solid var(--stall); outline-offset: 3px; }
+</style>
+<stall-card farm="" name="" tagline="" logo="" color="#2e5e4e" theme="paper" town="" count={0} href="" size="row">
+  <zb-if test={href}>
+    <a class="stall" class:banner={size === 'banner'} href={href} data-theme={theme} style={{ '--stall': hex, '--ring': hex }}>
+      <div class="awning" aria-hidden="true"></div>
+      <div class="body">
+        <zb-if test={logo}><img class="logo" src={logo} alt=""><zb-else><user-avatar name={name} size={size === 'banner' ? 'xl' : 'lg'}></user-avatar></zb-else></zb-if>
+        <h3>{name}</h3>
+        <p class="tagline">{tagline}</p>
+        <p class="meta"><span zb-if={town}>{town}</span><strong zb-if={count > 0}>{count} for sale</strong></p>
+      </div>
+    </a>
+    <zb-else>
+      <div class="stall" class:banner={size === 'banner'} data-theme={theme} style={{ '--stall': hex, '--ring': hex }}>
+        <div class="awning" aria-hidden="true"></div>
+        <div class="body">
+          <zb-if test={logo}><img class="logo" src={logo} alt=""><zb-else><user-avatar name={name} size={size === 'banner' ? 'xl' : 'lg'}></user-avatar></zb-else></zb-if>
+          <h3>{name}</h3>
+          <p class="tagline">{tagline}</p>
+          <p class="meta"><span zb-if={town}>{town}</span><strong zb-if={count > 0}>{count} for sale</strong></p>
+        </div>
+      </div>
+    </zb-else>
+  </zb-if>
+</stall-card>

@@ -1,0 +1,58 @@
+<!--
+  A price chart: an area under a line, with the high, low and a crosshair that follows the
+  pointer and shows the value under it.
+  @fires pointhover - The pointer is over a point; `detail` is its index, or -1 when it leaves.
+-->
+<script>
+  import { emit } from '@zubra/runtime'
+
+  const W = 600
+  const H = 220
+  let hover = -1
+  const low = Math.min(...points)
+  const high = Math.max(...points)
+  const span = high - low || 1
+  const x = (index) => (index / Math.max(1, points.length - 1)) * W
+  const y = (value) => H - 12 - ((value - low) / span) * (H - 24)
+  const line = points.map((value, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${y(value).toFixed(1)}`).join("")
+  const area = points.length ? `${line}L${W},${H}L0,${H}Z` : ""
+  const shown = hover >= 0 && hover < points.length ? hover : -1
+
+  function move(event) {
+    const box = event.currentTarget.getBoundingClientRect()
+    const index = Math.round(((event.clientX - box.left) / box.width) * (points.length - 1))
+    const next = Math.max(0, Math.min(points.length - 1, index))
+    if (next === hover) return
+    hover = next
+    emit('pointhover', next)
+  }
+  function leave() {
+    hover = -1
+    emit('pointhover', -1)
+  }
+</script>
+<style>
+  :host { display: block; position: relative; }
+  svg { display: block; width: 100%; height: 14rem; }
+  .area { fill: var(--primary, #4f5df5); opacity: 0.12; }
+  .line { fill: none; stroke: var(--primary, #4f5df5); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .grid { stroke: var(--border, #d9dce3); stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+  .cross { stroke: var(--muted-foreground, #667085); vector-effect: non-scaling-stroke; }
+  .dot { fill: var(--card, #ffffff); stroke: var(--primary, #4f5df5); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .labels { position: absolute; inset: 0 auto 0 0; display: flex; flex-direction: column; justify-content: space-between; padding: 0.2rem 0; font-size: 0.7rem; color: var(--muted-foreground, #667085); pointer-events: none; font-variant-numeric: tabular-nums; }
+  .tip { position: absolute; top: 0.25rem; right: 0.25rem; padding: 0.2rem 0.5rem; border-radius: calc(var(--radius, 0.625rem) * 0.64); background: var(--foreground, #1d2130); color: var(--card, #ffffff); font-size: 0.8125rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+</style>
+<line-chart points={[]} label="Price">
+  <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${label}: ${points.length} points from ${low.toFixed(2)} to ${high.toFixed(2)}`} onpointermove={move} onpointerleave={leave}>
+    <line class="grid" x1="0" x2={W} y1="12" y2="12"></line>
+    <line class="grid" x1="0" x2={W} y1={H - 12} y2={H - 12}></line>
+    <path class="area" d={area}></path>
+    <path class="line" d={line}></path>
+    <zb-if test={shown >= 0}>
+      <line class="cross" x1={x(shown)} x2={x(shown)} y1="0" y2={H}></line>
+      <circle class="dot" cx={x(shown)} cy={y(points[shown])} r="4"></circle>
+    </zb-if>
+  </svg>
+  <div class="labels" aria-hidden="true"><span class="high">{high.toFixed(2)}</span><span class="low">{low.toFixed(2)}</span></div>
+  <span zb-if={shown >= 0} class="tip">{points[shown].toFixed(2)}</span>
+</line-chart>

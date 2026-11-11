@@ -1,0 +1,30 @@
+<!--
+  A person's picture, or their initials when there's no picture or it fails to load. `name` is
+  the picture's text alternative (and where the initials come from). `size` is sm, md, lg or xl.
+  `status` (online, away, busy, offline) adds a dot, and says so in words for screen readers.
+-->
+<script>
+  let failed = false
+  const initials = name.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase()
+  const statusLabel = { online: "online", away: "away", busy: "busy", offline: "offline" }[status] ?? ""
+  const shown = Boolean(src) && !failed
+</script>
+<style>
+  :host { display: inline-block; vertical-align: middle; }
+  .avatar-frame { position: relative; display: inline-grid; place-items: center; width: var(--size); height: var(--size); border-radius: 50%; background: var(--muted, #f4f4f5); color: color-mix(in oklab, var(--muted-foreground, #71717a) 70%, var(--foreground, #18181b)); font-weight: 700; font-size: calc(var(--size) * 0.38); line-height: 1; user-select: none; }
+  .avatar-sm { --size: 2rem; } .avatar-md { --size: 2.5rem; } .avatar-lg { --size: 3.5rem; } .avatar-xl { --size: 5rem; }
+  img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+  .avatar-dot { position: absolute; right: 0; bottom: 0; width: calc(var(--size) * 0.28); height: calc(var(--size) * 0.28); min-width: 0.55rem; min-height: 0.55rem; border: 2px solid var(--background, #fff); border-radius: 50%; background: #a1a1aa; }
+  .avatar-online { background: oklch(0.65 0.17 150); }
+  .avatar-away { background: oklch(0.78 0.16 80); }
+  .avatar-busy { background: var(--destructive, #dc2626); }
+  .avatar-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+<user-avatar src="" name="" size="md" status="">
+  <span class="avatar-frame avatar-{size}">
+    <img zb-if={shown} src={src} alt={name} onerror={() => (failed = true)}>
+    <span zb-else role="img" aria-label={name || "Avatar"}>{initials}</span>
+    <span zb-if={statusLabel} class="avatar-dot avatar-{status}"></span>
+    <span zb-if={statusLabel} class="avatar-hidden">, {statusLabel}</span>
+  </span>
+</user-avatar>

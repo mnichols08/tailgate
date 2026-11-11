@@ -22,6 +22,7 @@
   .head { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 0.5rem; font-size: 0.8rem; color: var(--muted-foreground); padding: 0 0.2rem; }
   action-button { justify-self: start; }
   .empty { color: var(--muted-foreground); }
+  @media (max-width: 40rem) { .head { display: none; } }
 </style>
 <farm-stock doc="">
   <section>

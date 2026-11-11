@@ -1,0 +1,95 @@
+<!--
+  How a farm looks at the market: its name, tagline, colour, theme and logo. These are the farm's
+  Sync document ('use collection brands by farm'), the same one every `farm-stall` on the market
+  reads, so a change shows on customers' screens as it's made. Like the stock list, it saves on
+  this device first and works offline.
+-->
+<script>
+  'use collection brands by farm'
+  import { from } from '@zubra/runtime'
+  import './stall-card.zb'
+  import './text-field.zb'
+  import './color-swatches.zb'
+  import './choice-cards.zb'
+  import './file-drop.zb'
+  import './action-button.zb'
+
+  let name = from(nameNow)
+  let tagline = from(taglineNow)
+  let color = from(colorNow)
+  let theme = from(themeNow)
+  let logo = from(logoNow)
+  let logoProblem = ''
+  // A new logo reaches the server a moment after it's chosen; until then its address may miss.
+  let retry = 0
+  const logoUrl = logo ? '/logos/' + farm + '.webp?v=' + logo.length + (retry ? '&r=' + retry : '') : ''
+  const again = () => retry < 10 && setTimeout(() => retry++, 300)
+
+  const colors = ['#9b2d20', '#b7791f', '#4f7a28', '#23766f', '#1f5f8b', '#3f4f5a', '#6b3a6e', '#7a4b2a']
+  const themes = [
+    { id: 'paper', title: 'Paper', detail: 'Warm page, book serif' },
+    { id: 'zinc', title: 'Zinc', detail: 'Clean and neutral' },
+    { id: 'candy', title: 'Candy', detail: 'Bright and round' },
+    { id: 'midnight', title: 'Midnight', detail: 'Dark and calm' },
+    { id: 'terminal', title: 'Terminal', detail: 'Typewriter, sharp corners' },
+  ]
+
+  /** Fit the picture into a 192px square and keep it as a small WebP, so it syncs quickly. */
+  async function useLogo(event) {
+    const file = event.detail?.[0]
+    logoProblem = ''
+    if (!file) return
+    try {
+      const picture = await createImageBitmap(file)
+      const side = Math.min(picture.width, picture.height)
+      const canvas = document.createElement('canvas')
+      canvas.width = canvas.height = 192
+      canvas.getContext('2d').drawImage(picture, (picture.width - side) / 2, (picture.height - side) / 2, side, side, 0, 0, 192, 192)
+      logo = canvas.toDataURL('image/webp', 0.86)
+    } catch {
+      logoProblem = 'That file isn’t a picture we can read. Try a PNG or JPEG.'
+    }
+  }
+</script>
+<style>
+  .editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem); gap: 2rem; align-items: start; }
+  .fields { display: grid; gap: 1.5rem; }
+  fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 0.6rem; }
+  legend { font-weight: 600; margin-bottom: 0.4rem; padding: 0; }
+  .hint { margin: 0; color: var(--muted-foreground); font-size: 0.9rem; }
+  .logo-row { display: flex; gap: 1rem; align-items: center; }
+  .logo-row img { width: 4rem; height: 4rem; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1px var(--border); }
+  .preview { position: sticky; top: 0; display: grid; gap: 0.6rem; }
+  .preview h3 { margin: 0; font-size: 1rem; }
+  .problem { margin: 0; color: var(--destructive); font-size: 0.9rem; }
+  @container (max-width: 44rem) { .editor { grid-template-columns: 1fr; } .preview { position: static; order: -1; } }
+  :host { display: block; container-type: inline-size; }
+</style>
+<storefront-editor farm="" name-now="" tagline-now="" color-now="#2e5e4e" theme-now="paper" logo-now="" town="">
+  <div class="editor">
+    <div class="fields">
+      <text-field label="Farm name" value={name} maxlength={40} required onvaluechange={(event) => (name = event.detail)}></text-field>
+      <text-field label="One line about your farm" description="Shown under your name at the market." value={tagline} maxlength={90} rows={2} onvaluechange={(event) => (tagline = event.detail)}></text-field>
+      <fieldset>
+        <legend>Logo</legend>
+        <div class="logo-row" zb-if={logo}>
+          <img src={logoUrl} alt="Your current logo" onerror={again}>
+          <action-button variant="outline" size="sm" onclick={() => (logo = '')}>Remove logo</action-button>
+        </div>
+        <file-drop label={logo ? 'Replace your logo' : 'Add your logo'} hint="A square picture works best. PNG or JPEG, up to 5 MB." accept="image/*" multiple={false} max-size={5} onfileschange={useLogo}></file-drop>
+        <p class="problem" role="alert" zb-if={logoProblem}>{logoProblem}</p>
+      </fieldset>
+      <fieldset>
+        <legend>Colour</legend>
+        <color-swatches label="Your farm's colour" colors={colors} value={color} onvaluechange={(event) => (color = event.detail)}></color-swatches>
+        <p class="hint">Used for your awning, your buttons and your prices.</p>
+      </fieldset>
+      <choice-cards label="Style" items={themes} value={theme} onvaluechange={(event) => (theme = event.detail)}></choice-cards>
+    </div>
+    <aside class="preview" aria-label="Preview">
+      <h3>How customers see you</h3>
+      <stall-card farm={farm} name={name} tagline={tagline} color={color} theme={theme} logo={logoUrl} town={town}></stall-card>
+      <p class="hint">Changes save as you make them, on this device first.</p>
+    </aside>
+  </div>
+</storefront-editor>

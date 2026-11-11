@@ -5,12 +5,14 @@
   (`status-now`); the element takes over from the document once it loads.
 
   Who is looking at the order is presence: shared live between the people on it, never stored.
+  `compact` is the small card for the farmer's order board.
 -->
 <script>
   'use collection orders'
   import { from } from '@zubra/runtime'
   import { presence, peers } from '@zubra/sync'
   import './step-indicator.zb'
+  import './status-badge.zb'
 
   let status = from(statusNow)
   let driverName = from(driverNow)
@@ -21,28 +23,48 @@
   const labels = ['Placed', 'Driver assigned', 'On the way', 'Delivered']
   // Delivered is past the last step: every step shows done.
   const reached = status === 'delivered' ? steps.length : steps.indexOf(status)
+  const badge = { placed: 'neutral', claimed: 'primary', picked: 'warning', delivered: 'success' }
   const watching = others.filter((other) => other.looking && other.looking !== viewer).map((other) => other.looking)
   const driverHere = watching.includes('driver')
 </script>
 <style>
-  article { border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); padding: 1rem 1.1rem; background: var(--card); display: grid; gap: 0.6rem; }
+  article { display: grid; gap: 0.7rem; padding: 1rem 1.15rem; border-radius: var(--radius); background: var(--card); box-shadow: 0 0 0 1px var(--border); }
+  article.moving { box-shadow: 0 0 0 1px var(--border), inset 4px 0 0 var(--tg-amber, #e3a21a); }
   header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
-  h3 { margin: 0; font-size: 1.05rem; }
-  .total { font-variant-numeric: tabular-nums; font-weight: 600; }
+  h3 { margin: 0; font-size: 1.1rem; }
+  .total { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+  .total small { display: block; font-weight: 400; font-size: 0.75rem; color: var(--muted-foreground); text-align: right; }
+  .meta { margin: 0; color: var(--muted-foreground); font-size: 0.925rem; }
   step-indicator { display: block; }
-  .meta { margin: 0; color: var(--muted-foreground); font-size: 0.9rem; }
-  .live { margin: 0; font-size: 0.85rem; color: var(--primary); }
-  .live { transition: opacity 0.3s; @starting-style { opacity: 0; } }
+  .live { margin: 0; display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 600; }
+  .live::before { content: ""; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--tg-amber, #e3a21a); box-shadow: 0 0 0 0 color-mix(in oklch, var(--tg-amber, #e3a21a) 60%, transparent); animation: beacon 1.6s ease-out infinite; }
+  @keyframes beacon { to { box-shadow: 0 0 0 0.6rem transparent; } }
+  @media (prefers-reduced-motion: reduce) { .live::before { animation: none; } }
+  .compact { padding: 0.75rem 0.9rem; gap: 0.35rem; }
+  .compact h3 { font-size: 1rem; }
+  .compact .meta { font-size: 0.85rem; }
 </style>
-<order-card doc="" item-name="" qty={0} unit="" total="" farm-name="" customer-name="" address="" status-now="placed" driver-now="" viewer="customer">
-  <article>
-    <header>
-      <h3>{qty} {unit} · {itemName}</h3>
-      <span class="total">{total}</span>
-    </header>
-    <p class="meta">From {farmName} to {customerName}, {address}</p>
-    <step-indicator steps={labels} current={reached}></step-indicator>
-    <p class="meta" zb-if={driverName}>Driver: {driverName}</p>
-    <p class="live" zb-if={driverHere && status !== 'delivered'}>{driverName || 'The driver'} is looking at this order now</p>
-  </article>
+<order-card doc="" item-name="" qty={0} unit="" total="" farm-name="" customer-name="" address="" status-now="placed" driver-now="" viewer="customer" compact={false} when="">
+  <zb-if test={compact}>
+    <article class="compact" class:moving={status === 'picked'}>
+      <header>
+        <h3>{qty} {unit} {itemName}</h3>
+        <status-badge variant={badge[status] ?? 'neutral'} dot>{labels[steps.indexOf(status)] ?? status}</status-badge>
+      </header>
+      <p class="meta">{viewer === 'customer' ? `From ${farmName}` : `For ${customerName}`} · {total}<span zb-if={when}> · {when}</span></p>
+      <p class="meta" zb-if={driverName}>Driver: {driverName}</p>
+    </article>
+    <zb-else>
+      <article class:moving={status === 'picked'}>
+        <header>
+          <h3>{qty} {unit} · {itemName}</h3>
+          <span class="total">{total}<small>incl. $6.00 delivery</small></span>
+        </header>
+        <p class="meta">From {farmName} to {customerName}, {address}</p>
+        <step-indicator steps={labels} current={reached}></step-indicator>
+        <p class="meta" zb-if={driverName}>Driver: {driverName}</p>
+        <p class="live" zb-if={driverHere && status !== 'delivered'}>{driverName || 'Your driver'} has this order open now</p>
+      </article>
+    </zb-else>
+  </zb-if>
 </order-card>

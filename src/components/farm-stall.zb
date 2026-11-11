@@ -1,0 +1,21 @@
+<!--
+  A farm's stall, live. Its look is the farm's Sync document ('use collection brands by farm'),
+  which only that farmer writes: change the colour or logo on the dashboard and every market page
+  showing the stall follows without a reload. The server HTML already has the current look.
+-->
+<script>
+  'use collection brands by farm'
+  import { from } from '@zubra/runtime'
+  import './stall-card.zb'
+
+  let name = from(nameNow)
+  let tagline = from(taglineNow)
+  let color = from(colorNow)
+  let theme = from(themeNow)
+  let logo = from(logoNow)
+  // The document holds the picture; the page shows it from the server's address for it.
+  const logoUrl = logo ? '/logos/' + farm + '.webp?v=' + logo.length : ''
+</script>
+<farm-stall farm="" name-now="" tagline-now="" color-now="#2e5e4e" theme-now="paper" logo-now="" town="" count={0} href="" size="row">
+  <stall-card farm={farm} name={name} tagline={tagline} color={color} theme={theme} logo={logoUrl} town={town} count={count} href={href} size={size}></stall-card>
+</farm-stall>

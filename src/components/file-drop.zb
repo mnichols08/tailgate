@@ -1,0 +1,77 @@
+<!--
+  A place to drop files, or click to choose them, on a native `<input type="file">`, so the
+  chosen files submit with the form under `name` and the keyboard opens the picker as usual.
+  Files are listed with their size and can be removed. `accept` limits the types (".pdf,image/*"),
+  `multiple` allows several, and `max-size` (in MB) turns away files that are too big, saying so.
+  @fires fileschange - The chosen files changed; `detail` is the array of File objects.
+-->
+<script>
+  import { emit, id } from '@zubra/runtime'
+
+  const inputId = id()
+  const hintId = id()
+  let input = null
+  let files = []
+  let over = false
+  let problem = ""
+
+  const size = (bytes) => (bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1048576).toFixed(1)} MB`)
+  // Put a list of files into the native input (so the form sends exactly those) and the list.
+  function use(list) {
+    const limit = maxSize > 0 ? maxSize * 1048576 : Infinity
+    const kept = [...list].filter((file) => file.size <= limit)
+    const turned = [...list].length - kept.length
+    problem = turned ? `${turned === 1 ? "One file is" : `${turned} files are`} over ${maxSize} MB and ${turned === 1 ? "wasn't" : "weren't"} added.` : ""
+    const chosen = multiple ? kept : kept.slice(0, 1)
+    const transfer = new DataTransfer()
+    chosen.forEach((file) => transfer.items.add(file))
+    input.files = transfer.files
+    files = chosen.map((file, i) => ({ key: `${file.name}-${file.size}-${i}`, file }))
+    emit('fileschange', chosen)
+  }
+  function drop(event) {
+    event.preventDefault()
+    over = false
+    if (!disabled) use(multiple ? [...files.map((entry) => entry.file), ...event.dataTransfer.files] : event.dataTransfer.files)
+  }
+  function remove(entry) {
+    use(files.filter((other) => other !== entry).map((other) => other.file))
+    input.focus()
+  }
+</script>
+<style>
+  :host { display: block; }
+  .drop-label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.925rem; }
+  .drop-zone { display: grid; justify-items: center; gap: 0.35rem; padding: 1.75rem 1rem; border: 2px dashed var(--border, #d4d4d8); border-radius: var(--radius, 0.625rem); background: color-mix(in oklab, var(--muted, #f4f4f5) 40%, var(--background, #fff)); text-align: center; cursor: pointer; transition: border-color var(--duration-fast, 150ms), background var(--duration-fast, 150ms); }
+  .drop-zone:hover, .drop-over { border-color: var(--primary, #18181b); background: color-mix(in oklab, var(--primary, #18181b) 5%, var(--background, #fff)); }
+  .drop-zone:focus-within { border-style: solid; border-color: var(--ring, #a1a1aa); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #a1a1aa) 40%, transparent); }
+  .drop-disabled { opacity: 0.55; cursor: not-allowed; }
+  .drop-main { font-weight: 600; }
+  .drop-main u { text-underline-offset: 3px; }
+  .drop-hint { font-size: 0.85rem; color: color-mix(in oklab, var(--muted-foreground, #71717a) 75%, var(--foreground, #18181b)); }
+  input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .drop-problem { margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--destructive, #dc2626); }
+  .drop-problem:empty { display: none; }
+  ul { display: grid; gap: 0.4rem; margin: 0.75rem 0 0; padding: 0; list-style: none; }
+  li { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border, #e4e4e7); border-radius: calc(var(--radius, 0.625rem) * 0.8); font-size: 0.9rem; }
+  .drop-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drop-size { color: color-mix(in oklab, var(--muted-foreground, #71717a) 75%, var(--foreground, #18181b)); font-variant-numeric: tabular-nums; }
+  .drop-remove { width: 1.75rem; height: 1.75rem; border: 0; border-radius: 50%; background: none; color: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
+  .drop-remove:hover { background: var(--accent, #f4f4f5); }
+  .drop-remove:focus-visible { outline: 2px solid var(--ring, #a1a1aa); outline-offset: 1px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; } }
+</style>
+<file-drop label="Attachments" hint="" name="" accept="" multiple={true} max-size={0} disabled={false}>
+  <span class="drop-label" id={`${inputId}-label`}>{label}</span>
+  <label class="drop-zone" class:drop-over={over} class:drop-disabled={disabled} ondragover.prevent={() => !disabled && (over = true)} ondragleave={() => (over = false)} ondrop={drop}>
+    <span class="drop-main">Drop {multiple ? "files" : "a file"} here, or <u>choose</u></span>
+    <span class="drop-hint" id={hintId}>{hint || (maxSize > 0 ? `Up to ${maxSize} MB${multiple ? " each" : ""}` : "")}</span>
+    <input ref={input} id={inputId} type="file" name={name || null} accept={accept || null} multiple={multiple} disabled={disabled} aria-labelledby={`${inputId}-label`} aria-describedby={hintId} onchange={(event) => use(event.target.files)}>
+  </label>
+  <p class="drop-problem" role="alert">{problem}</p>
+  <ul zb-if={files.length} aria-label="Chosen files">
+    <zb-each items={files} as="entry" key={entry.key}>
+      <li><span class="drop-name">{entry.file.name}</span><span class="drop-size">{size(entry.file.size)}</span><button type="button" class="drop-remove" aria-label={`Remove ${entry.file.name}`} onclick={() => remove(entry)}>×</button></li>
+    </zb-each>
+  </ul>
+</file-drop>

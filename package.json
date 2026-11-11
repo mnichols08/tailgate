@@ -10,6 +10,8 @@
     "test": "node --test test/app.test.js"
   },
   "dependencies": {
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/source-sans-3": "^5.3.1",
     "@zubra/actions": "5.4.1",
     "@zubra/compiler": "5.4.1",
     "@zubra/runtime": "5.4.1",

@@ -1,0 +1,67 @@
+/* Candy: Bright and round: big corners, a rounded face, and motion that bounces a little. */
+
+[data-theme="candy"] {
+  --background: oklch(0.985 0.012 330);
+  --foreground: oklch(0.24 0.06 300);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.06 300);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.24 0.06 300);
+  --primary: oklch(0.52 0.24 300);
+  --primary-foreground: oklch(0.99 0.01 300);
+  --secondary: oklch(0.93 0.05 200);
+  --secondary-foreground: oklch(0.3 0.08 220);
+  --muted: oklch(0.95 0.03 320);
+  --muted-foreground: oklch(0.45 0.07 310);
+  --accent: oklch(0.93 0.06 340);
+  --accent-foreground: oklch(0.24 0.06 300);
+  --destructive: oklch(0.54 0.22 15);
+  --border: oklch(0.88 0.05 320);
+  --input: oklch(0.8 0.07 320);
+  --ring: oklch(0.65 0.2 300);
+  --chart-1: oklch(0.68 0.22 350);
+  --chart-2: oklch(0.7 0.13 190);
+  --chart-3: oklch(0.82 0.16 95);
+  --radius: 1.1rem;
+  --duration-fast: 140ms;
+  --duration-normal: 240ms;
+  --duration-slow: 420ms;
+  --ease-out: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --heading-weight: 800;
+  --font-body: ui-rounded, "SF Pro Rounded", Nunito, Quicksand, "Varela Round", system-ui, sans-serif;
+  --font-heading: ui-rounded, "SF Pro Rounded", Nunito, Quicksand, "Varela Round", system-ui, sans-serif;
+  color-scheme: light;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+}
+
+.dark [data-theme="candy"], [data-theme="candy"].dark {
+  --background: oklch(0.21 0.05 300);
+  --foreground: oklch(0.96 0.02 320);
+  --card: oklch(0.26 0.06 300);
+  --card-foreground: oklch(0.96 0.02 320);
+  --popover: oklch(0.26 0.06 300);
+  --popover-foreground: oklch(0.96 0.02 320);
+  --primary: oklch(0.8 0.15 320);
+  --primary-foreground: oklch(0.22 0.06 300);
+  --secondary: oklch(0.32 0.06 220);
+  --secondary-foreground: oklch(0.93 0.04 200);
+  --muted: oklch(0.3 0.05 300);
+  --muted-foreground: oklch(0.8 0.05 310);
+  --accent: oklch(0.33 0.07 330);
+  --accent-foreground: oklch(0.96 0.02 320);
+  --destructive: oklch(0.7 0.19 15);
+  --border: oklch(0.38 0.07 300);
+  --input: oklch(0.46 0.08 300);
+  --ring: oklch(0.8 0.15 320);
+  --chart-1: oklch(0.75 0.2 350);
+  --chart-2: oklch(0.78 0.12 190);
+  --chart-3: oklch(0.86 0.15 95);
+  color-scheme: dark;
+}
+
+[data-theme="candy"] :is(h1, h2, h3, h4) {
+  font-family: var(--font-heading);
+  font-weight: 800;
+}

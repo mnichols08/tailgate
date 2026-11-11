@@ -13,21 +13,21 @@
     'use server'
     const done = await context.market.claim(context.person, formData)
     if (done.error) return done
-    return Response.redirect(new URL('/drive', context.request.url), 303)
+    return Response.redirect(new URL('/drive?done=claimed', context.request.url), 303)
   }
 
   export async function pickUp(formData, context) {
     'use server'
     const done = await context.market.advance(context.person, formData, 'picked')
     if (done.error) return done
-    return Response.redirect(new URL('/drive', context.request.url), 303)
+    return Response.redirect(new URL('/drive?done=picked', context.request.url), 303)
   }
 
   export async function deliver(formData, context) {
     'use server'
     const done = await context.market.advance(context.person, formData, 'delivered')
     if (done.error) return done
-    return Response.redirect(new URL('/drive', context.request.url), 303)
+    return Response.redirect(new URL('/drive?done=delivered', context.request.url), 303)
   }
 
   const show = (event) => (problem = event.detail.value?.error ?? event.detail.error ?? '')

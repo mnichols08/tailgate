@@ -1,0 +1,57 @@
+<!--
+  A donut chart of `segments` (`[{ label, value, tone }]`, `tone` 0–7), with the total in the
+  middle and a legend. Choosing a segment (or its legend entry) selects it; again clears it.
+  @slot - What's in the middle; the total by default.
+  @fires valuechange - The selected label changed; `detail` is the label, or "" for none.
+-->
+<script>
+  const R = 15.915494309189533 // circumference 100, so lengths are percentages
+  const total = segments.reduce((sum, segment) => sum + segment.value, 0)
+  const arcs = segments.reduce((list, segment) => {
+    const start = list.length ? list[list.length - 1].end : 0
+    const length = total ? (segment.value / total) * 100 : 0
+    return [...list, { ...segment, start, end: start + length, length }]
+  }, []).filter((arc) => arc.length > 0)
+  const percent = (arc) => `${Math.round(arc.length)}%`
+
+  function select(label) {
+    value = value === label ? "" : label
+  }
+</script>
+<style>
+  :host { display: grid; grid-template-columns: 11rem 1fr; gap: 1.25rem; align-items: center; }
+  .chart { position: relative; }
+  svg { display: block; width: 100%; transform: rotate(-90deg); }
+  circle { fill: none; stroke-width: 5; cursor: pointer; transition: stroke-width var(--duration-fast, 150ms), opacity var(--duration-fast, 150ms); }
+  circle.track { stroke: var(--muted, #f3f4f7); cursor: default; }
+  circle.dim { opacity: 0.3; }
+  circle.on { stroke-width: 6.5; }
+  .middle { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+  ul { display: grid; gap: 0.25rem; margin: 0; padding: 0; list-style: none; }
+  button { display: grid; grid-template-columns: 0.75rem 1fr auto; gap: 0.5rem; align-items: center; width: 100%; padding: 0.3rem 0.45rem; border: 0; border-radius: calc(var(--radius, 0.625rem) * 0.72); background: none; color: inherit; font: inherit; font-size: 0.875rem; text-align: left; cursor: pointer; }
+  button:hover, button[aria-pressed=true] { background: var(--muted, #f3f4f7); }
+  .swatch { width: 0.75rem; height: 0.75rem; border-radius: calc(var(--radius, 0.625rem) * 0.32); }
+  .pct { color: var(--muted-foreground, #667085); font-variant-numeric: tabular-nums; }
+  .t0 { stroke: var(--chart-1, #4f46e5); background: var(--chart-1, #4f46e5); } .t1 { stroke: var(--chart-2, #0891b2); background: var(--chart-2, #0891b2); }
+  .t2 { stroke: var(--chart-3, #16a34a); background: var(--chart-3, #16a34a); } .t3 { stroke: var(--chart-4, #ca8a04); background: var(--chart-4, #ca8a04); }
+  .t4 { stroke: var(--chart-5, #ea580c); background: var(--chart-5, #ea580c); } .t5 { stroke: #db2777; background: #db2777; }
+  .t6 { stroke: #7c3aed; background: #7c3aed; } .t7 { stroke: #64748b; background: #64748b; }
+  @media (max-width: 34rem) { :host { grid-template-columns: 1fr; } .chart { max-width: 12rem; margin: 0 auto; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; } }
+</style>
+<donut-chart segments={[]} value:model="" label="Chart">
+  <div class="chart">
+    <svg viewBox="0 0 42 42" role="img" aria-label={label}>
+      <circle class="track" cx="21" cy="21" r={R}></circle>
+      <zb-each items={arcs} as="arc" key={arc.label}>
+        <circle class={`t${arc.tone}`} class:dim={value && value !== arc.label} class:on={value === arc.label} cx="21" cy="21" r={R} stroke-dasharray={`${arc.length} ${100 - arc.length}`} stroke-dashoffset={-arc.start} data-label={arc.label} onclick={() => select(arc.label)}><title>{arc.label}: {percent(arc)}</title></circle>
+      </zb-each>
+    </svg>
+    <div class="middle"><zb-slot><strong>{total}</strong></zb-slot></div>
+  </div>
+  <ul>
+    <zb-each items={arcs} as="arc" key={arc.label}>
+      <li><button type="button" aria-pressed={value === arc.label ? "true" : "false"} data-label={arc.label} onclick={() => select(arc.label)}><span class={`swatch t${arc.tone}`}></span><span>{arc.label}</span><span class="pct">{percent(arc)}</span></button></li>
+    </zb-each>
+  </ul>
+</donut-chart>

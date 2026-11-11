@@ -1,0 +1,37 @@
+<!--
+  Values compared side by side as horizontal bars, longest-to-shortest if `sorted`. Each bar has
+  its label and value in text, and the chart is a list screen readers read in order, so nothing
+  depends on seeing the bars. `items` is `[{ label, value }]`; `unit` goes after each value
+  ("%", " visits"). `max` sets the full length (defaults to the largest value).
+-->
+<script>
+  const list = sorted ? [...items].sort((a, b) => b.value - a.value) : items
+  const top = max > 0 ? max : Math.max(1, ...items.map((item) => item.value))
+  const format = (value) => `${typeof value === "number" ? value.toLocaleString() : value}${unit}`
+</script>
+<style>
+  :host { display: block; }
+  figure { margin: 0; }
+  figcaption { margin-bottom: 0.75rem; font-weight: 700; }
+  ol { display: grid; gap: 0.55rem; margin: 0; padding: 0; list-style: none; }
+  li { display: grid; grid-template-columns: minmax(5rem, 30%) 1fr auto; align-items: center; gap: 0.75rem; font-size: 0.9rem; }
+  .bars-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bars-track { height: 0.85rem; border-radius: calc(var(--radius, 0.625rem) * 0.3); background: color-mix(in oklab, var(--muted, #f4f4f5) 70%, transparent); overflow: hidden; }
+  .bars-fill { display: block; height: 100%; border-radius: inherit; background: var(--chart-1, oklch(0.65 0.2 40)); transition: width var(--duration-slow, 400ms) var(--ease-out, ease-out); }
+  .bars-value { min-width: 3.5rem; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; } }
+</style>
+<bar-chart items={[]} label="" unit="" max={0} sorted={false}>
+  <figure>
+    <figcaption zb-if={label}>{label}</figcaption>
+    <ol aria-label={label || null}>
+      <zb-each items={list} as="item" key={item.label}>
+        <li>
+          <span class="bars-label">{item.label}</span>
+          <span class="bars-track" aria-hidden="true"><span class="bars-fill" style:width={`${Math.max(0, Math.min(100, (item.value / top) * 100))}%`}></span></span>
+          <span class="bars-value">{format(item.value)}</span>
+        </li>
+      </zb-each>
+    </ol>
+  </figure>
+</bar-chart>

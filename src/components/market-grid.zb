@@ -1,0 +1,33 @@
+<!--
+  Everything for sale, with a filter by farm. The server renders every item; with JavaScript the
+  filter narrows the grid without a reload. `items` is the catalog, `farms` the filter's options.
+-->
+<script>
+  import './segmented-control.zb'
+  import './produce-card.zb'
+  import './empty-state.zb'
+
+  let only = ''
+  const options = [{ value: '', label: 'All farms' }, ...farms]
+  const shown = only ? items.filter((listing) => listing.farm === only) : items
+</script>
+<style>
+  :host { display: grid; gap: 1.25rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .count { margin: 0; color: var(--muted-foreground); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1rem; }
+  segmented-control { display: none; }
+  :host(:state(hydrated)) segmented-control { display: block; }
+</style>
+<market-grid items={[]} farms={[]} can-order={false}>
+  <div class="bar">
+    <segmented-control label="Show" options={options} value={only} onvaluechange={(event) => (only = event.detail)}></segmented-control>
+    <p class="count">{shown.length} {shown.length === 1 ? 'thing' : 'things'} for sale</p>
+  </div>
+  <div class="grid">
+    <zb-each items={shown} as="listing" key={`${listing.farm}/${listing.item}`}>
+      <produce-card farm={listing.farm} item={listing.item} name={listing.name} unit={listing.unit} price={listing.price} qty={listing.qty} farm-name={listing.farmName} farm-color={listing.farmColor} farm-logo={listing.farmLogo} can-order={canOrder}></produce-card>
+    </zb-each>
+  </div>
+  <empty-state zb-if={shown.length === 0} heading="Nothing for sale right now">Farmers add what they have from their dashboard. Check back this afternoon.</empty-state>
+</market-grid>

@@ -1,0 +1,23 @@
+<!--
+  A row of mutually exclusive options. `options` is `[{ value, label }]`.
+  @fires valuechange - The choice changed; `detail` is the option's value.
+-->
+<script>
+  function pick(option) {
+    if (option.value === value) return
+    value = option.value
+  }
+</script>
+<style>
+  :host { display: inline-block; }
+  div { display: inline-flex; flex-wrap: wrap; padding: 0.2rem; border-radius: calc(var(--radius, 0.625rem) * 1.12); background: var(--muted, #f3f4f7); gap: 0.2rem; }
+  button { padding: 0.35rem 0.8rem; border: 0; border-radius: calc(var(--radius, 0.625rem) * 0.8); background: none; color: color-mix(in oklab, var(--muted-foreground, #71717a) 75%, var(--foreground, #18181b)); font: inherit; font-weight: 600; cursor: pointer; }
+  button[aria-pressed=true] { background: var(--card, #ffffff); color: var(--foreground, #1d2130); box-shadow: 0 1px 2px #0002; }
+</style>
+<segmented-control value:model="" options={[]} label="">
+  <div role="group" aria-label={label}>
+    <zb-each items={options} as="option" key={option.value}>
+      <button type="button" aria-pressed={option.value === value ? "true" : "false"} data-value={option.value} onclick={() => pick(option)}>{option.label}</button>
+    </zb-each>
+  </div>
+</segmented-control>

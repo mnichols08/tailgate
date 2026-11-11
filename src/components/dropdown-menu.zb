@@ -1,0 +1,83 @@
+<!--
+  A menu of actions behind a button, on the platform's `popover`: the browser puts it in the top
+  layer and closes it on Escape or a click outside. Down or Up on the button opens it; arrow keys,
+  Home, End and typing a letter move among the items; Enter or Space picks one, and focus goes
+  back to the button. It's placed below the button by CSS anchor positioning, or by script where
+  that isn't supported. `items` is `[{ value, label, disabled? }]`.
+  @slot label - The button's content (defaults to `label`).
+  @fires itemselect - An item was picked; `detail` is its value.
+-->
+<script>
+  import { id, emit, onMount } from '@zubra/runtime'
+  import { rovingFocus, typeahead } from '@zubra/runtime/primitives'
+
+  const menuId = id()
+  const buttonId = id()
+  const anchored = typeof CSS !== "undefined" && CSS.supports("position-area: bottom")
+  let button = null
+  let menu = null
+  let open = false
+  let last = false // open at the last item (Up on the button)
+
+  const entries = () => [...menu.querySelectorAll("[role=menuitem]:not(:disabled)")]
+
+  function toggled(event) {
+    open = event.newState === "open"
+    if (open) {
+      if (!anchored) place()
+      const all = entries()
+      ;(last ? all.at(-1) : all[0])?.focus()
+      last = false
+    } else if (menu.contains(document.activeElement) || document.activeElement === document.body) {
+      button.focus()
+    }
+  }
+  function keys(event) {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+    event.preventDefault()
+    last = event.key === "ArrowUp"
+    menu.showPopover()
+  }
+  function choose(item) {
+    menu.hidePopover()
+    button.focus()
+    emit("itemselect", item.value)
+  }
+  // Tab out of the menu closes it, as menus do.
+  function left(event) {
+    if (open && !menu.contains(event.relatedTarget) && event.relatedTarget !== button) menu.hidePopover()
+  }
+  // Without anchor positioning: below the button, or above it if there's no room.
+  function place() {
+    const at = button.getBoundingClientRect()
+    const own = menu.getBoundingClientRect()
+    menu.style.top = `${at.bottom + 4 + own.height <= innerHeight ? at.bottom + 4 : Math.max(4, at.top - own.height - 4)}px`
+    menu.style.left = `${Math.min(at.left, innerWidth - own.width - 4)}px`
+  }
+
+  onMount(() => {
+    const roving = rovingFocus(menu, { selector: "[role=menuitem]", orientation: "vertical" })
+    const typing = typeahead(menu, { selector: "[role=menuitem]" })
+    return () => { roving(); typing() }
+  })
+</script>
+<style>
+  :host { display: inline-block; }
+  .trigger { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.8rem; border: 1px solid var(--border, #dde); border-radius: calc(var(--radius, 0.625rem) * 0.8); background: var(--card, #fff); color: inherit; font: inherit; cursor: pointer; }
+  .trigger::after { content: ""; width: 0.35rem; height: 0.35rem; border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); }
+  [popover] { position: fixed; inset: auto; margin: 0; min-width: 11rem; padding: 0.3rem; border: 1px solid var(--border, #dde); border-radius: calc(var(--radius, 0.625rem) * 0.96); background: var(--card, #fff); color: var(--foreground, #1d2130); box-shadow: 0 8px 24px #0d122026; }
+  @supports (position-area: bottom) {
+    [popover] { position-area: bottom span-right; position-try-fallbacks: flip-block; margin-top: 4px; }
+  }
+  [role=menuitem] { display: block; width: 100%; padding: 0.4rem 0.6rem; border: 0; border-radius: calc(var(--radius, 0.625rem) * 0.64); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  [role=menuitem]:hover, [role=menuitem]:focus { background: var(--accent, #f2f4f8); outline: none; }
+  [role=menuitem]:disabled { color: var(--muted-foreground, #98a2b3); cursor: default; }
+</style>
+<dropdown-menu label="Options" items={[]}>
+  <button type="button" class="trigger" id={buttonId} ref={button} popovertarget={menuId} aria-haspopup="menu" aria-expanded={open ? "true" : "false"} style:anchor-name={`--${menuId}`} onkeydown={keys}><zb-slot name="label">{label}</zb-slot></button>
+  <div popover id={menuId} role="menu" aria-labelledby={buttonId} ref={menu} style:position-anchor={`--${menuId}`} ontoggle={toggled} onfocusout={left}>
+    <zb-each items={items} as="item" key={item.value}>
+      <button type="button" role="menuitem" tabindex="-1" disabled={!!item.disabled} onclick={() => choose(item)}>{item.label}</button>
+    </zb-each>
+  </div>
+</dropdown-menu>
