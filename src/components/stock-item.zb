@@ -8,6 +8,7 @@
   'use collection listings by farm, item'
   import { emit } from '@zubra/runtime'
   import './money-input.zb'
+  import './quantity-stepper.zb'
 
   let name = ''
   let unit = 'each'
@@ -21,7 +22,7 @@
   .narrow-label { display: none; font-size: 0.8rem; color: var(--muted-foreground); }
   .row { transition: opacity 0.25s; @starting-style { opacity: 0; } }
   input { font: inherit; min-width: 0; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--background); }
-  input.out { border-color: #c98a2b; }
+  .out input { border-color: #c98a2b; }
   button { font: inherit; border: 0; background: transparent; color: var(--muted-foreground); cursor: pointer; padding: 0.4rem; }
   /* On a phone each row wraps: name and remove on top, then unit and quantity, then price. */
   @media (max-width: 40rem) {
@@ -38,7 +39,7 @@
     <input class="name" aria-label="Item" placeholder="Item name" value={name} oninput={(event) => (name = event.target.value)}>
     <div><span class="narrow-label" aria-hidden="true">Unit</span><input aria-label="Unit" value={unit} oninput={(event) => (unit = event.target.value)}></div>
     <div class="price"><span class="narrow-label" aria-hidden="true">Price</span><money-input label="Price in dollars" value={price} onvaluechange={(event) => (price = event.detail ?? 0)}></money-input></div>
-    <div><span class="narrow-label" aria-hidden="true">Quantity</span><input aria-label="Quantity" type="number" min="0" step="1" value={qty} class:out={qty === 0} oninput={(event) => (qty = Number(event.target.value))}></div>
+    <div class:out={qty === 0}><span class="narrow-label" aria-hidden="true">Quantity</span><quantity-stepper label="Quantity" editable min={0} max={9999} value={qty} onvaluechange={(event) => (qty = event.detail)}></quantity-stepper></div>
     <button type="button" aria-label="Remove {name || 'item'}" onclick={() => emit('remove', item)}>✕</button>
   </div>
 </stock-item>

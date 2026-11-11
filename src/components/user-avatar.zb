@@ -5,7 +5,8 @@
 -->
 <script>
   let failed = false
-  const initials = name.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase()
+  // Plain string methods, so the server renders them too (a pattern is the browser's alone).
+  const initials = name.trim().split(" ").filter((part) => part !== "").map((part) => part[0]).slice(0, 2).join("").toUpperCase()
   const statusLabel = { online: "online", away: "away", busy: "busy", offline: "offline" }[status] ?? ""
   const shown = Boolean(src) && !failed
 </script>

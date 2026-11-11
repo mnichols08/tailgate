@@ -32,18 +32,6 @@ function inkOn(hex) {
   return light > 0.45 ? '#1b1f1d' : '#ffffff';
 }
 
-/**
- * Render `name` with slot content that may itself be Zubra output. @zubra/server parses slot
- * HTML as a template, which refuses the hydration markers (`<?zb …?>`) in already-rendered
- * children, so each slot is rendered as a placeholder and its content put in afterwards.
- */
-function render(p, name, props = {}, slots = {}) {
-  const marks = Object.fromEntries(Object.keys(slots).map((slot) => [slot, `tg-slot-${slot}-${Math.random().toString(36).slice(2)}`]));
-  let html = p.render(name, props, marks);
-  for (const [slot, mark] of Object.entries(marks)) html = html.replace(mark, () => slots[slot]);
-  return html;
-}
-
 /** Static files: Zubra UI's themes and the two typefaces. */
 function assets() {
   const files = new Map();
@@ -89,9 +77,9 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
     const problem = result?.value?.error ?? (result?.error ? 'That didn’t go through. Try again.' : '');
     const done = DONE[url.searchParams.get('done')] ?? '';
     const banner = problem
-      ? render(p, 'alert-banner', { variant: 'danger' }, { default: escape(problem) })
+      ? p.render('alert-banner', { variant: 'danger' }, { default: escape(problem) })
       : done
-        ? `<noscript>${render(p, 'alert-banner', { variant: 'success' }, { default: escape(done) })}</noscript>`
+        ? `<noscript>${p.render('alert-banner', { variant: 'success' }, { default: escape(done) })}</noscript>`
         : '';
     return { banner, done };
   }
@@ -137,7 +125,7 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
   };
 
   const ask = (p, role, verb) =>
-    `<section>${render(p, 'empty-state', { heading: `This page is for ${role}s` }, { default: `Choose a ${role} to ${verb}.`, actions: `<a class="button-light" href="/start">Choose who you are</a>` })}</section>`;
+    `<section>${p.render('empty-state', { heading: `This page is for ${role}s` }, { default: `Choose a ${role} to ${verb}.`, actions: `<a class="button-light" href="/start">Choose who you are</a>` })}</section>`;
 
   // ---- Farmer dashboard ----------------------------------------------------------------------
   const FARM_NAV = [
@@ -148,14 +136,14 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
   ];
   function farmShell(p, person, current, heading, content) {
     const b = market.brand(person.farm);
-    return render(p, 
+    return p.render(
       'dashboard-shell',
       {
         product: b.name,
         heading,
         nav: FARM_NAV,
         current,
-        user: person.name.split(' ')[0],
+        user: person.name,
         menu: [
           { value: `/farms/${person.farm}`, label: 'See my stall' },
           { value: '/', label: 'Open the market' },
@@ -184,8 +172,8 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
         <section class="panel"><h2>What sold, last 30 days</h2>${p.render('donut-chart', { segments: stats.byItem, label: 'Sales by item in dollars' })}</section>
       </div>
       <div class="panels">
-        <section class="panel">${stock.length ? p.render('bar-chart', { items: stock, label: 'Stock on hand', unit: ' left' }) : render(p, 'empty-state', { heading: 'Nothing listed' }, { default: 'Add what you have on the Stock page.' })}</section>
-        <section class="panel"><h2>Latest orders</h2><div class="stack">${recent.map((order) => p.render('order-card', card(order, 'farmer', true))).join('') || render(p, 'empty-state', { heading: 'No orders yet' }, { default: 'They show up here as customers place them.' })}</div></section>
+        <section class="panel">${stock.length ? p.render('bar-chart', { items: stock, label: 'Stock on hand', unit: ' left' }) : p.render('empty-state', { heading: 'Nothing listed' }, { default: 'Add what you have on the Stock page.' })}</section>
+        <section class="panel"><h2>Latest orders</h2><div class="stack">${recent.map((order) => p.render('order-card', card(order, 'farmer', true))).join('') || p.render('empty-state', { heading: 'No orders yet' }, { default: 'They show up here as customers place them.' })}</div></section>
       </div>`;
   }
 
@@ -201,7 +189,7 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
       <div class="board">${columns
         .map(([status, heading]) => {
           const cards = all.filter((order) => order.status === status).slice(0, status === 'delivered' ? 8 : 50);
-          return render(p, 'kanban-column', { heading, count: all.filter((order) => order.status === status).length }, { default: cards.map((order) => p.render('order-card', card(order, 'farmer', true))).join('') });
+          return p.render('kanban-column', { heading, count: all.filter((order) => order.status === status).length }, { default: cards.map((order) => p.render('order-card', card(order, 'farmer', true))).join('') });
         })
         .join('')}</div>`;
   }
@@ -212,9 +200,9 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
     { id: 'earnings', label: 'Earnings', href: '/drive/earnings' },
   ];
   const driveShell = (p, person, current, heading, content) =>
-    render(p, 
+    p.render(
       'dashboard-shell',
-      { product: 'Tailgate for drivers', heading, nav: DRIVE_NAV, current, user: person.name.split(' ')[0], menu: [{ value: '/', label: 'Open the market' }, { value: '/start', label: 'Switch person' }] },
+      { product: 'Tailgate for drivers', heading, nav: DRIVE_NAV, current, user: person.name, menu: [{ value: '/', label: 'Open the market' }, { value: '/start', label: 'Switch person' }] },
       { default: `<div class="app-body">${content}</div>`, actions: `<a class="shell-actions-link" href="/">Market</a>` },
     );
 
@@ -236,8 +224,8 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
         ${p.render('stat-card', { label: 'Yours in progress', value: String(mine.length), period: mine.length ? 'see below' : 'claim one to start' })}
         ${p.render('stat-card', { label: 'Earned this week', value: stats.earned, change: stats.weekChange, period: `${stats.week} deliveries at $6 each` })}
       </div>
-      <section class="panel"><h2>Your deliveries</h2><div class="stack">${mine.map(row).join('') || render(p, 'empty-state', { heading: 'Nothing in progress' }, { default: 'Claim an open delivery below. You’ll get the farm’s address to pick it up.' })}</div></section>
-      <section class="panel"><h2>Open deliveries</h2><div class="stack">${open.map(row).join('') || render(p, 'empty-state', { heading: 'Nothing waiting' }, { default: 'New orders appear here the moment they’re placed.' })}</div></section>`;
+      <section class="panel"><h2>Your deliveries</h2><div class="stack">${mine.map(row).join('') || p.render('empty-state', { heading: 'Nothing in progress' }, { default: 'Claim an open delivery below. You’ll get the farm’s address to pick it up.' })}</div></section>
+      <section class="panel"><h2>Open deliveries</h2><div class="stack">${open.map(row).join('') || p.render('empty-state', { heading: 'Nothing waiting' }, { default: 'New orders appear here the moment they’re placed.' })}</div></section>`;
   }
 
   function earnings(p, person) {
@@ -292,7 +280,7 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
       const p = zubra.page();
 
       if (url.pathname === '/start') {
-        const as = (id, verb) => `<form method="post" action="/who"><input type="hidden" name="who" value="${id}">${render(p, 'action-button', { type: 'submit', variant: 'outline' }, { default: `${verb} as ${escape(market.people[id].name.split(' ')[0])}` })}</form>`;
+        const as = (id, verb) => `<form method="post" action="/who"><input type="hidden" name="who" value="${id}">${p.render('action-button', { type: 'submit', variant: 'outline' }, { default: `${verb} as ${escape(market.people[id].name.split(' ')[0])}` })}</form>`;
         const role = (title, line, ids, verb) => `<section class="role"><h2>${title}</h2><p>${line}</p><div class="as">${ids.map((id) => as(id, verb)).join('')}</div></section>`;
         return page(req, res, url, {
           title: 'Start',
@@ -333,7 +321,7 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
           body: `<div class="storefront" data-theme="${b.theme}" style="--primary:${b.color};--ring:${b.color};--primary-foreground:${inkOn(b.color)};display:grid;gap:2rem;padding:clamp(0rem,2vw,1.5rem);border-radius:calc(var(--radius) * 2);background:var(--background);color:var(--foreground)">
   ${stall(p, b.farm, 'banner', '')}
   <section><div class="section-head"><h2 style="font-family:var(--font-heading)">For sale from ${escape(b.name)}</h2><p><a href="/">Back to all farms</a></p></div>
-  <div class="stalls" style="grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))">${cards || render(p, 'empty-state', { heading: 'Sold out for now' }, { default: `${escape(b.name)} has nothing listed right now.` })}</div></section>
+  <div class="stalls" style="grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))">${cards || p.render('empty-state', { heading: 'Sold out for now' }, { default: `${escape(b.name)} has nothing listed right now.` })}</div></section>
 </div>`,
         });
       }
@@ -348,7 +336,7 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
           person,
           p,
           body: `<section><h1>My orders</h1><p class="lede">Delivering to ${escape(person.address)}. You pay the driver when it arrives.</p></section>
-<section><div class="section-head"><h2>On the way</h2><p>These update by themselves.</p></div><div class="stack">${active.map((order) => p.render('order-card', card(order, 'customer'))).join('') || render(p, 'empty-state', { heading: 'Nothing on the way' }, { default: 'Order something from the market and follow it here.', actions: p.render('action-button', { href: '/' }, { default: 'Go to the market' }) })}</div></section>
+<section><div class="section-head"><h2>On the way</h2><p>These update by themselves.</p></div><div class="stack">${active.map((order) => p.render('order-card', card(order, 'customer'))).join('') || p.render('empty-state', { heading: 'Nothing on the way' }, { default: 'Order something from the market and follow it here.', actions: p.render('action-button', { href: '/' }, { default: 'Go to the market' }) })}</div></section>
 ${past.length ? `<section><div class="section-head"><h2>Earlier orders</h2></div><div class="stalls" style="grid-template-columns:repeat(auto-fill,minmax(16rem,1fr))">${past.map((order) => p.render('order-card', card(order, 'customer', true))).join('')}</div></section>` : ''}`,
         });
       }

@@ -61,7 +61,7 @@
           <span class="total">{total}<small>incl. $6.00 delivery</small></span>
         </header>
         <p class="meta">From {farmName} to {customerName}, {address}</p>
-        <step-indicator steps={labels} current={reached}></step-indicator>
+        <step-indicator steps={labels} current={reached} readonly></step-indicator>
         <p class="meta" zb-if={driverName}>Driver: {driverName}</p>
         <p class="live" zb-if={driverHere && status !== 'delivered'}>{driverName || 'Your driver'} has this order open now</p>
       </article>
