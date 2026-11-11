@@ -1,5 +1,7 @@
 <!--
-  A number with − and + buttons, between `min` and `max`. A form control.
+  A number with − and + buttons, between `min` and `max`. A form control. `editable` lets the
+  number be typed as well (a stock count of 40 shouldn't take forty presses); what's typed is
+  clamped to `min`..`max` when the field is left.
   @fires valuechange - The value changed; `detail` is the new value.
 -->
 <script>
@@ -10,6 +12,12 @@
     if (next === value) return
     value = next
   }
+  function typed(event) {
+    const number = Math.round(Number(event.target.value))
+    const next = Number.isFinite(number) && event.target.value.trim() !== "" ? Math.min(max, Math.max(min, number)) : shown
+    event.target.value = String(next)
+    if (next !== value) value = next
+  }
 </script>
 <style>
   :host { display: inline-flex; align-items: center; gap: 0.5rem; }
@@ -17,9 +25,12 @@
   /* aria-disabled, not disabled: a disabled button would drop keyboard focus at the limit. */
   button[aria-disabled=true] { opacity: 0.5; cursor: default; }
   output { min-width: 2ch; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+  input { width: calc(4ch + 1.2rem); padding: 0.35rem 0.4rem; border: 1px solid var(--border, #ccd); border-radius: calc(var(--radius, 0.625rem) * 0.8); background: var(--background, #fff); color: inherit; font: inherit; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; appearance: textfield; }
+  input::-webkit-inner-spin-button, input::-webkit-outer-spin-button { appearance: none; margin: 0; }
 </style>
-<quantity-stepper form-associated value:model={1} min={0} max={10} label="Quantity">
+<quantity-stepper form-associated value:model={1} min={0} max={10} label="Quantity" editable={false}>
   <button type="button" class="less" aria-label={`Fewer ${label}`} aria-disabled={shown <= min ? "true" : "false"} onclick={() => step(-1)}>−</button>
-  <output aria-live="polite" aria-label={label}>{shown}</output>
+  <input zb-if={editable} type="number" inputmode="numeric" min={min} max={max} step="1" aria-label={label} value={shown} onchange={typed} onkeydown.enter={typed}>
+  <output zb-else aria-live="polite" aria-label={label}>{shown}</output>
   <button type="button" class="more" aria-label={`More ${label}`} aria-disabled={shown >= max ? "true" : "false"} onclick={() => step(1)}>+</button>
 </quantity-stepper>

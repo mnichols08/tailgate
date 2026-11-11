@@ -26,6 +26,7 @@
   const again = () => retry < 10 && setTimeout(() => retry++, 300)
 
   const colors = ['#9b2d20', '#b7791f', '#4f7a28', '#23766f', '#1f5f8b', '#3f4f5a', '#6b3a6e', '#7a4b2a']
+  const colorNames = ['Barn red', 'Harvest gold', 'Orchard green', 'Spruce teal', 'Creek blue', 'Slate', 'Plum', 'Walnut']
   const themes = [
     { id: 'paper', title: 'Paper', detail: 'Warm page, book serif' },
     { id: 'zinc', title: 'Zinc', detail: 'Clean and neutral' },
@@ -81,7 +82,7 @@
       </fieldset>
       <fieldset>
         <legend>Colour</legend>
-        <color-swatches label="Your farm's colour" colors={colors} value={color} onvaluechange={(event) => (color = event.detail)}></color-swatches>
+        <color-swatches label="Your farm's colour" colors={colors} names={colorNames} value={color} onvaluechange={(event) => (color = event.detail)}></color-swatches>
         <p class="hint">Used for your awning, your buttons and your prices.</p>
       </fieldset>
       <choice-cards label="Style" items={themes} value={theme} onvaluechange={(event) => (theme = event.detail)}></choice-cards>

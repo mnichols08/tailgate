@@ -66,7 +66,10 @@ test('without JavaScript: the market is complete and an order goes through', asy
   await page.goto(base);
   assert.deepEqual(await page.$$eval('farm-stall h3', (h) => h.map((x) => x.textContent)), ['Hilltop Farm', 'Meadow Creek', 'Bear Run Orchard']);
   assert.equal(await page.locator('produce-card h3').count(), 9);
-  // Zubra UI's quantity-stepper can't submit itself without JavaScript; the form carries 1.
+  // Zubra renders the stepper's no-JavaScript stand-in itself (nested form controls), and the
+  // avatars' initials on the server (Zubra UI): nothing here is waiting for JavaScript.
+  assert.equal(await page.locator('produce-card[item=beeswax] quantity-stepper input[type=hidden][name=qty][data-zb-fallback]').getAttribute('value'), '1');
+  assert.equal((await page.locator('farm-stall[farm=hilltop] [role=img]').textContent()).trim(), 'HF');
   await page.click('produce-card[item=beeswax] button[type=submit]');
   await page.waitForURL(/\/orders/);
   assert.match(await page.textContent('order-card:has-text("Beeswax candles")'), /1 pair · Beeswax candles/);
@@ -122,6 +125,7 @@ test('a driver claims; the customer sees it live, and sees the driver looking', 
 
   // No reload on the customer's page.
   await card.locator('[aria-current=step]', { hasText: 'Driver assigned' }).waitFor({ timeout: 5000 });
+  assert.equal(await card.getByRole('button').count(), 0, 'the status is read-only: nothing to press (Zubra UI step-indicator readonly)');
   await card.getByText('Driver: Jules Friend').waitFor({ timeout: 5000 });
   await card.getByText('Jules Friend has this order open now').waitFor({ timeout: 5000 });
 
@@ -151,6 +155,7 @@ test('a farmer edits stock offline; the market has it once they reconnect', asyn
 
   await farmer.context.setOffline(true);
   await honey.locator('input[aria-label=Quantity]').fill('30');
+  await honey.locator('input[aria-label=Quantity]').press('Tab'); // Zubra UI's editable stepper commits on leaving
   await honey.locator('money-input input').fill('12');
   await farmer.page.waitForTimeout(500);
   let market = await (await fetch(base)).text();
@@ -167,6 +172,7 @@ test('a farmer edits stock offline; the market has it once they reconnect', asyn
   await row.locator('input[aria-label=Unit]').fill('dozen');
   await row.locator('money-input input').fill('7');
   await row.locator('input[aria-label=Quantity]').fill('15');
+  await row.locator('input[aria-label=Quantity]').press('Tab');
   await until(async () => /name="Sweet corn" unit="dozen" price="\$7\.00" qty="15"/.test(await (await fetch(base)).text()), 'the new row on the market');
   await farmer.context.close();
 });

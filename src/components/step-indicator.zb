@@ -1,6 +1,7 @@
 <!--
   Where a multi-step flow is: steps done (which can be revisited), the current one, and those
-  ahead.
+  ahead. `readonly` shows where something is without offering to go back (an order's status):
+  plain list items, not buttons. `current` past the last step shows every step done.
   @fires stepselect - A finished step was chosen; `detail` is its index.
 -->
 <script>
@@ -9,21 +10,25 @@
 <style>
   ol { display: flex; gap: 0.5rem; margin: 0; padding: 0; list-style: none; counter-reset: step; }
   li { flex: 1; }
-  button { display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.6rem 0.25rem 0.5rem; border: 0; border-top: 3px solid var(--border, #dde); background: none; color: var(--muted-foreground, #667); font: inherit; font-size: 0.875rem; font-weight: 600; text-align: left; }
-  button::before { counter-increment: step; content: counter(step); display: grid; place-items: center; flex: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--border, #dde); color: var(--foreground, #111); font-size: 0.75rem; }
-  .done button { border-top-color: var(--primary, #36c); color: var(--foreground, #111); cursor: pointer; }
-  .done button::before { content: "✓"; background: var(--primary, #36c); color: var(--primary-foreground, white); }
-  .current button { border-top-color: var(--primary, #36c); color: var(--primary, #36c); }
-  .current button::before { background: var(--primary, #36c); color: var(--primary-foreground, white); }
+  .step { display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.6rem 0.25rem 0.5rem; border: 0; border-top: 3px solid var(--border, #dde); background: none; color: var(--muted-foreground, #667); font: inherit; font-size: 0.875rem; font-weight: 600; text-align: left; }
+  .step::before { counter-increment: step; content: counter(step); display: grid; place-items: center; flex: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--border, #dde); color: var(--foreground, #111); font-size: 0.75rem; }
+  .done .step { border-top-color: var(--primary, #36c); color: var(--foreground, #111); }
+  .done button { cursor: pointer; }
+  .done .step::before { content: "✓"; background: var(--primary, #36c); color: var(--primary-foreground, white); }
+  .current .step { border-top-color: var(--primary, #36c); color: var(--primary, #36c); }
+  .current .step::before { background: var(--primary, #36c); color: var(--primary-foreground, white); }
   button:disabled { cursor: default; }
-  @media (max-width: 36rem) { .label { display: none; } }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Narrow: numbers only, except read-only, where the labels are the point. */
+  @media (max-width: 36rem) { button .label { display: none; } }
 </style>
-<step-indicator steps={[]} current={0}>
+<step-indicator steps={[]} current={0} readonly={false}>
   <nav aria-label="Progress">
     <ol>
       <zb-each items={steps} as="step" index="index" key={step}>
-        <li class:done={index < current} class:current={index === current}>
-          <button type="button" disabled={index >= current} aria-current={index === current ? "step" : "false"} onclick={() => emit('stepselect', index)}><span class="label">{step}</span></button>
+        <li class:done={index < current} class:current={index === current} aria-current={readonly && index === current ? "step" : null}>
+          <span zb-if={readonly} class="step"><span class="label">{step}</span><span zb-if={index < current} class="sr-only"> (done)</span></span>
+          <button zb-else type="button" class="step" disabled={index >= current} aria-current={index === current ? "step" : "false"} onclick={() => emit('stepselect', index)}><span class="label">{step}</span></button>
         </li>
       </zb-each>
     </ol>

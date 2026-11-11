@@ -45,9 +45,6 @@
     <form zb-if={canOrder} action={order} onaction={(event) => (problem = event.detail.value?.error ?? event.detail.error ?? '')}>
       <input type="hidden" name="farm" value={farm}>
       <input type="hidden" name="item" value={item}>
-      <!-- Without JavaScript the stepper can't submit its value, so the form also carries 1.
-           The server uses it only when `qty` is missing. -->
-      <input type="hidden" name="qtyFallback" value="1">
       <quantity-stepper name="qty" value={1} min={1} max={qty} label={`${unit} of ${name}`}></quantity-stepper>
       <action-button type="submit">Order</action-button>
       <alert-banner zb-if={problem} variant="danger">{problem}</alert-banner>
