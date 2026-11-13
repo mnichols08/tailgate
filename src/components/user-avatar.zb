@@ -5,7 +5,9 @@
 -->
 <script>
   let failed = false
-  const initials = name.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase()
+  // Plain string methods, so the server renders them too (a pattern is the browser's alone): a
+  // tab or line break between the names counts as a space.
+  const initials = name.replaceAll("\t", " ").replaceAll("\n", " ").replaceAll("\r", " ").trim().split(" ").filter((part) => part !== "").map((part) => part[0]).slice(0, 2).join("").toUpperCase()
   const statusLabel = { online: "online", away: "away", busy: "busy", offline: "offline" }[status] ?? ""
   const shown = Boolean(src) && !failed
 </script>
