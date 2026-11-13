@@ -12,7 +12,7 @@
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.3.0",
     "@fontsource/source-sans-3": "^5.3.1",
-    "@potomac-solutions/kit": "github:Potomac-Solutions/kit#2254343f31b034c331e10ff418269313bf0d3b40",
+    "@potomac-solutions/kit": "github:Potomac-Solutions/kit#41d3587e7b8c85088c834896e8983a955a8a0c64",
     "@zubra/actions": "5.13.1",
     "@zubra/compiler": "5.13.1",
     "@zubra/runtime": "5.13.1",
