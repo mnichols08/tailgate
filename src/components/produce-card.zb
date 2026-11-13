@@ -1,7 +1,7 @@
 <!--
-  One thing for sale, with its order form. The catalog is rendered by the server from what every
-  farm has listed; ordering posts to a 'use server' function that checks the stock and takes it
-  in one step, so the last crate goes to one customer.
+  One thing for sale, with a form that puts it in the shopper's cart. The catalog is rendered by
+  the server from what every farm has listed; adding posts to a 'use server' function that checks
+  there are that many left. Stock is taken at checkout, for the whole cart at once.
 -->
 <script>
   import './quantity-stepper.zb'
@@ -12,11 +12,11 @@
 
   let problem = ''
 
-  export async function order(formData, context) {
+  export async function add(formData, context) {
     'use server'
-    const done = await context.market.placeOrder(context.person, formData)
+    const done = await context.market.addToCart(context.person, formData)
     if (done.error) return done
-    return Response.redirect(new URL('/orders?done=placed', context.request.url), 303)
+    return Response.redirect(new URL('/cart?done=added', context.request.url), 303)
   }
 
   const few = qty <= 3
@@ -42,14 +42,14 @@
     </a>
     <h3>{name}</h3>
     <p class="price"><strong>{price}</strong> <span>per {unit}</span> <status-badge zb-if={few} variant="warning">Only {qty} left</status-badge></p>
-    <form zb-if={canOrder} action={order} onaction={(event) => (problem = event.detail.value?.error ?? event.detail.error ?? '')}>
+    <form zb-if={canOrder} action={add} onaction={(event) => (problem = event.detail.value?.error ?? event.detail.error ?? '')}>
       <input type="hidden" name="farm" value={farm}>
       <input type="hidden" name="item" value={item}>
       <!-- Without JavaScript the stepper can't submit its value, so the form also carries 1.
            The server uses it only when `qty` is missing. -->
       <input type="hidden" name="qtyFallback" value="1">
       <quantity-stepper name="qty" value={1} min={1} max={qty} label={`${unit} of ${name}`}></quantity-stepper>
-      <action-button type="submit">Order</action-button>
+      <action-button type="submit">Add to cart</action-button>
       <alert-banner zb-if={problem} variant="danger">{problem}</alert-banner>
     </form>
     <p zb-if={!canOrder} class="left">{qty} {unit === 'each' ? 'available' : `${unit}s available`}</p>
