@@ -12,11 +12,12 @@
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.3.0",
     "@fontsource/source-sans-3": "^5.3.1",
-    "@zubra/actions": "5.4.1",
-    "@zubra/compiler": "5.4.1",
-    "@zubra/runtime": "5.4.1",
-    "@zubra/server": "5.4.1",
-    "@zubra/sync": "5.4.1"
+    "@potomac-solutions/kit": "github:Potomac-Solutions/kit#2254343f31b034c331e10ff418269313bf0d3b40",
+    "@zubra/actions": "5.9.1",
+    "@zubra/compiler": "5.9.1",
+    "@zubra/runtime": "5.9.1",
+    "@zubra/server": "5.9.1",
+    "@zubra/sync": "5.9.1"
   },
   "devDependencies": {
     "playwright": "1.63.0"
