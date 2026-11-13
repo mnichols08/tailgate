@@ -29,7 +29,7 @@ Tailgate is a showcase for [Zubra](https://github.com/journey-to-code-org/zubra)
 | `@zubra/sync` | A farmer's stock and storefront live on their device first, so they can be edited with no signal and sync on reconnect. Every order's status is a live document, and so is every farm's stall, so pages follow changes without reloading |
 | Presence (`@zubra/sync`) | The shopper sees when the driver has their order open |
 | `@zubra/actions` | Adding to the cart, claiming a delivery, picking up and delivering are plain form posts to `'use server'` functions. They work with JavaScript off, and their code never reaches the browser |
-| [Potomac kit](https://github.com/Potomac-Solutions/kit) (private) | The commerce rules: `catalog` (what's for sale and how many are left), `cart`, `checkout` (stock from every farm taken at once, one charge, one order per farm), `pay` (charged at most once; its test provider), and `stages` (placed → claimed → picked up → delivered). `cart-panel` and `checkout-form` are copies of the kit's components (see Not yet) |
+| [Potomac kit](https://github.com/Potomac-Solutions/kit) (private) | The commerce rules: `catalog` (what's for sale and how many are left), `cart`, `checkout` (stock from every farm taken at once, one charge, one order per farm), `pay` (charged at most once; its test provider), and `stages` (placed → claimed → picked up → delivered). `cart-panel` and `checkout-form` are the kit's components, loaded from the package (`createZubra({ packages })`) |
 | [Zubra UI](https://github.com/journey-to-code-org/zubra-ui) | The dashboards, charts, controls and themes: `dashboard-shell`, `stat-card`, `line-chart`, `donut-chart`, `bar-chart`, `kanban-column`, `step-indicator`, `status-badge`, `quantity-stepper`, `money-input`, `text-field`, `file-drop`, `color-swatches`, `choice-cards`, `segmented-control`, `user-avatar`, `action-button`, `alert-banner`, `empty-state`, `toast-region`, and five themes farmers choose from (Paper, Zinc, Candy, Midnight, Terminal) |
 
 The rule behind the split: **Sync for what one person owns, Actions for what two people could both want.** A farmer's price and colours are theirs alone, so last-writer-wins is right. The last crate of squash, or a delivery two drivers tap at once, has to be decided by the server: a delivery is an action, and the squash is decided at checkout, where the whole cart's stock is taken in one step.
@@ -92,7 +92,6 @@ Start at `/start` and pick who you are. Accounts come later; the demo seeds thre
 
 - Accounts. A visitor picks who they are; a signed cookie holds the choice.
 - Real payments. Checkout uses the kit's test provider: any card works except 4000 0000 0000 0002, which is declined.
-- The kit's own `cart-panel` and `checkout-form`. Tailgate has its own copies of the Zubra UI parts they use, and `@zubra/server` refuses one tag from two places, so Tailgate carries copies of the two until Zubra has a rule for that.
 - Maps. Drivers get directions links to the farm and the door. An in-app map, using Garrett County Adventures as a reference, is next.
 - The market's farm filter and product cards show a farm's new name after a reload; its stall updates live.
 - Read rules. Anyone signed in can follow any order's live status.

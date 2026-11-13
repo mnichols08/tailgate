@@ -374,6 +374,15 @@ test('every screen renders for the person it is for', async () => {
   await shopper.close();
 });
 
+test("the cart's components are the kit's, and Tailgate's parts stand in for the kit's copies", async () => {
+  const kit = await fetch(`${base}/_zubra/components/@potomac-solutions/kit/components/cart-panel.js`);
+  assert.equal(kit.status, 200);
+  assert.match(await kit.text(), /import "\.\/action-button\.js"/, "the kit's cart-panel imports its own copy");
+  // That copy is Tailgate's module, so the browser defines <action-button> once.
+  const copy = await (await fetch(`${base}/_zubra/components/@potomac-solutions/kit/components/action-button.js`)).text();
+  assert.match(copy, /^export \* from "\/_zubra\/components\/action-button\.js";/);
+});
+
 test('server code never reaches the browser', async () => {
   // The two components with 'use server' functions, as the browser loads them.
   for (const path of ['/_zubra/components/produce-card.js', '/_zubra/components/delivery-actions.js']) {

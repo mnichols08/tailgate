@@ -7,7 +7,7 @@
 // - Anything two people could both want (adding the last crate, claiming a delivery) is a
 //   'use server' function (@zubra/actions): a plain form post, with or without JavaScript.
 // - The cart and checkout are the Potomac kit's catalog, cart, checkout, pay and stages
-//   (src/market.js), shown by copies of the kit's cart-panel and checkout-form.
+//   (src/market.js), shown by the kit's cart-panel and checkout-form from the package.
 // - The controls, charts, dashboards and themes are Zubra UI, installed with `npx shadcn add`.
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -72,7 +72,9 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
   const session = sessions({ secret, people: market.people });
   market.identify((request) => session.fromRequest(request));
 
-  const zubra = createZubra({ components, cache });
+  // The kit's components come from the package. Where Tailgate has its own copy of a part they
+  // use (action-button, text-field…), Tailgate's is used for both (Zubra 5.10).
+  const zubra = createZubra({ components, cache, packages: ['@potomac-solutions/kit/components'] });
   const actions = await createActions({
     components,
     context: ({ request }) => ({ market, person: session.fromRequest(request) }),
