@@ -1,7 +1,7 @@
 // The Tailgate walk: each browser context is one person's device.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
@@ -17,7 +17,9 @@ before(async () => {
   server = await createApp({ db: join(dir, 'tailgate.db'), cache: false, secret: 'test' });
   await new Promise((done) => server.listen(0, done));
   base = `http://localhost:${server.address().port}`;
-  browser = await chromium.launch();
+  // Playwright's own Chromium when it is installed; otherwise the machine's Chrome.
+  const system = ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((path) => existsSync(path));
+  browser = await chromium.launch().catch(() => chromium.launch({ executablePath: process.env.CHROME ?? system }));
 });
 after(async () => {
   await browser?.close();
