@@ -9,6 +9,10 @@
 import { createSyncServer } from '@zubra/sync/server';
 import { sqliteLog } from '@zubra/sync/sqlite';
 import { createStages } from '@potomac-solutions/kit/stages';
+import { createCatalog } from '@potomac-solutions/kit/catalog';
+import { createCart } from '@potomac-solutions/kit/cart';
+import { createCheckout } from '@potomac-solutions/kit/checkout';
+import { createPay, testProvider } from '@potomac-solutions/kit/pay';
 import { people, farms as seedFarms, listings as seedListings, history, underway, DELIVERY_CENTS } from './seed.js';
 
 /** The Zubra UI theme presets a farm can dress its storefront in. */
@@ -50,6 +54,26 @@ function ledger() {
     all: (collection) => [...docs.values()].filter((doc) => doc.collection === collection).map((doc) => ({ key: doc.key, ...doc.fields })),
   };
 }
+
+/** What the kit's answers mean, in Tailgate's words. */
+function words(answer) {
+  if (answer.ok) return answer;
+  const said = {
+    gone: 'That listing is gone.',
+    'sold-out': answer.left > 0 ? `Only ${answer.left} left.` : 'Sold out.',
+    'too-many': `You can have up to ${answer.max}.`,
+    'bad-qty': 'Choose how many, from 1 to 99.',
+    empty: 'Your cart is empty.',
+    'not-ready': 'Something in your cart sold out. Check your cart and try again.',
+    declined: 'That card was declined. Try another.',
+    'in-progress': 'That order is already going through.',
+    'not-yours': 'That checkout has expired. Try again.',
+  }[answer.error];
+  return { error: said ?? 'That didn’t go through. Try again.' };
+}
+
+/** The checkout keys this server makes (see `checkoutKey`). Anything else is refused. */
+const CHECKOUT_KEY = /^c[a-z0-9]{6,24}$/;
 
 const money = (cents) => `$${(cents / 100).toFixed(2)}`;
 const toCents = (price) => Math.round(Number(price) * 100);
@@ -117,14 +141,54 @@ export async function createMarket({ db = ':memory:' } = {}) {
     if (!response?.ok) throw new Error(`The log refused a server write (${response?.status})`);
   }
 
+  // The kit's store: the same documents, read synchronously, written as the server.
+  const byKey = (a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+  const store = {
+    get: (collection, key) => docs.get(collection, key) ?? null,
+    under: (collection, prefix = '') => docs.all(collection).filter((doc) => doc.key.startsWith(prefix)).sort(byKey),
+    write,
+  };
+
   // An order's journey (placed, claimed, picked up, delivered) is the kit's `stages` module.
   // The market says who the driver is and puts the answers into words.
   const delivery = createStages({
-    store: { get: (collection, key) => docs.get(collection, key) ?? null, under: (collection, prefix = '') => docs.all(collection).filter((doc) => doc.key.startsWith(prefix)), write },
+    store,
     collection: 'orders',
     steps: ['placed', 'claimed', 'picked', 'delivered'],
     owner: 'driver',
     stamp: ['delivered'],
+  });
+
+  // What's for sale is the kit's `catalog`, over the listings farmers write from their devices:
+  // a price in dollars, a count in `qty`, and on sale only while it's on the farm's list. A
+  // missing or unreadable count is none left (the kit reads `null` as no limit; a farm has one).
+  const farmOf = (key) => key.slice(0, key.indexOf('/'));
+  const catalogue = createCatalog({
+    store,
+    collection: 'listings',
+    left: 'qty',
+    read: (doc) => ({
+      name: String(doc.name ?? '').trim(),
+      unit: String(doc.unit ?? 'each').trim() || 'each',
+      cents: toCents(doc.price),
+      left: Number.isFinite(Number(doc.qty)) && doc.qty !== null && doc.qty !== '' ? Number(doc.qty) : 0,
+    }),
+    listed: (key) => (docs.get('farms', farmOf(key))?.items ?? []).includes(key.slice(key.indexOf('/') + 1)),
+  });
+
+  // A shopper's cart, one charge for all of it, and one order per farm (each farm's goods are
+  // picked up on their own, so each is its own delivery and its own fee). Payments are the kit's
+  // test provider: no money moves, and the checkout says so.
+  const cart = createCart({ store, catalog: catalogue });
+  const fees = ({ lines }) => [...new Set(lines.map((line) => farmOf(line.item)))].map((farm) => ({ label: `Delivery from ${farmName(farm)}`, cents: DELIVERY_CENTS, group: farm }));
+  const checkout = createCheckout({
+    store,
+    catalog: catalogue,
+    cart,
+    pay: createPay({ provider: testProvider(), store }),
+    stages: delivery,
+    group: (line) => farmOf(line.item),
+    fees,
   });
 
   // A fresh log gets the demo farms, their storefronts, first listings and three weeks of orders.
@@ -176,21 +240,27 @@ export async function createMarket({ db = ':memory:' } = {}) {
   const listingsOf = (farm) =>
     (docs.get('farms', farm)?.items ?? []).map((item) => ({ farm, item, ...docs.get('listings', `${farm}/${item}`) }));
 
-  /** What a customer can buy now: listings that are on a farm's list, named, priced and in stock. */
+  /**
+   * What a customer can buy now, from the kit's catalog: listings on a farm's list, named, priced
+   * and in stock, in the order each farm lists them.
+   */
   function catalog(only) {
     return seedFarms
       .filter((farm) => !only || farm.id === only)
       .flatMap((farm) => {
         const b = brand(farm.id);
-        return listingsOf(farm.id)
-          .filter((listing) => String(listing.name ?? '').trim() && Number(listing.price) > 0 && Number(listing.qty) > 0)
-          .map((listing) => ({
-            farm: listing.farm,
-            item: listing.item,
-            name: String(listing.name).trim(),
-            unit: String(listing.unit ?? 'each').trim() || 'each',
-            price: money(toCents(listing.price)),
-            qty: Math.floor(Number(listing.qty)),
+        const order = docs.get('farms', farm.id)?.items ?? [];
+        return catalogue
+          .items(`${farm.id}/`)
+          .map((found) => ({ ...found, item: found.key.slice(farm.id.length + 1) }))
+          .sort((x, y) => order.indexOf(x.item) - order.indexOf(y.item))
+          .map((found) => ({
+            farm: farm.id,
+            item: found.item,
+            name: found.name,
+            unit: found.unit,
+            price: money(found.cents),
+            qty: found.left,
             farmName: b.name,
             farmColor: b.color,
             farmLogo: logoUrl(farm.id),
@@ -198,21 +268,32 @@ export async function createMarket({ db = ':memory:' } = {}) {
       });
   }
 
-  const orderView = (order) => ({
+  /**
+   * An order's lines. An order from the cart (the kit's checkout) has `lines` and its farm in
+   * `group`; one placed before the cart, and the demo's history, is one listing.
+   */
+  const linesOf = (order) => (Array.isArray(order.lines) ? order.lines : [{ item: `${order.farm}/${order.item}`, name: order.itemName, unit: order.unit, qty: order.qty, total: order.cents }]);
+  const farmOfOrder = (order) => order.farm ?? order.group;
+
+  const orderView = (order) => {
+    const lines = linesOf(order);
+    const one = lines.length === 1;
+    return {
     doc: order.key,
-    farm: order.farm,
-    itemName: order.itemName,
-    qty: order.qty,
-    unit: order.unit,
+    farm: farmOfOrder(order),
+    itemName: lines.map((line) => line.name).join(', '),
+    qty: one ? lines[0].qty : lines.reduce((sum, line) => sum + line.qty, 0),
+    unit: one ? lines[0].unit : 'items',
     total: money(order.cents + (order.fee ?? 0)),
     goods: order.cents,
-    farmName: farmName(order.farm),
+    farmName: farmName(farmOfOrder(order)),
     customerName: personName(order.customer),
     address: order.address,
     status: order.status,
     driverName: order.driver ? personName(order.driver) : '',
     placed: order.placed,
-  });
+    };
+  };
   const newestFirst = (a, b) => b.placed - a.placed;
   const orders = (match) => docs.all('orders').filter(match).sort(newestFirst);
 
@@ -227,7 +308,7 @@ export async function createMarket({ db = ':memory:' } = {}) {
 
   /** A farm's dashboard: sales, open orders, low stock, and where the money came from. */
   function farmStats(farm, now = Date.now()) {
-    const mine = docs.all('orders').filter((order) => order.farm === farm);
+    const mine = docs.all('orders').filter((order) => farmOfOrder(order) === farm);
     const today = startOfDay(now);
     const sum = (from, to) => mine.filter((o) => o.placed >= from && o.placed < to).reduce((total, o) => total + o.cents, 0);
     const week = sum(today - 6 * DAY, today + DAY);
@@ -237,7 +318,7 @@ export async function createMarket({ db = ':memory:' } = {}) {
       return { label: dayLabel(from), value: sum(from, from + DAY) / 100 };
     });
     const byItem = new Map();
-    for (const order of mine.filter((o) => o.placed >= today - 29 * DAY)) byItem.set(order.itemName, (byItem.get(order.itemName) ?? 0) + order.cents / 100);
+    for (const order of mine.filter((o) => o.placed >= today - 29 * DAY)) for (const line of linesOf(order)) byItem.set(line.name, (byItem.get(line.name) ?? 0) + line.total / 100);
     const stock = listingsOf(farm).filter((listing) => String(listing.name ?? '').trim());
     return {
       week: money(week),
@@ -284,44 +365,54 @@ export async function createMarket({ db = ':memory:' } = {}) {
       who = fn;
     },
     ordersFor: (person) => orders((order) => order.customer === person.id).map(orderView),
-    ordersForFarm: (farm) => orders((order) => order.farm === farm).map(orderView),
+    ordersForFarm: (farm) => orders((order) => farmOfOrder(order) === farm).map(orderView),
     openDeliveries: () => orders((order) => order.status === 'placed' && !order.driver).map(orderView),
     deliveriesFor: (person) => orders((order) => order.driver === person.id && order.status !== 'delivered').map(orderView),
 
-    /** A customer orders `qty` of a listing. The check and the decrement can't be interleaved. */
-    async placeOrder(person, formData) {
-      if (person?.role !== 'customer') return { error: 'Choose a customer to order.' };
+    /** A shopper's cart, priced now, with the delivery fees checkout will add (one per farm). */
+    cart(person) {
+      const view = cart.view(person.id);
+      return { ...view, fees: fees({ lines: view.lines.filter((line) => !line.gone) }) };
+    },
+
+    /** Put `qty` of a listing in a shopper's cart. Nothing is taken from stock until checkout. */
+    async addToCart(person, formData) {
+      if (person?.role !== 'customer') return { error: 'Choose a shopper to buy.' };
       const farm = String(formData.get('farm') ?? '');
       const item = String(formData.get('item') ?? '');
-      // `qtyFallback` is the order form's no-JavaScript stand-in for the quantity stepper.
+      // `qtyFallback` is the form's no-JavaScript stand-in for the quantity stepper.
       const qty = Number(formData.get('qty') ?? formData.get('qtyFallback'));
-      if (!Number.isInteger(qty) || qty < 1 || qty > 100) return { error: 'Choose how many, from 1 to 100.' };
-      const listed = (docs.get('farms', farm)?.items ?? []).includes(item);
-      const listing = docs.get('listings', `${farm}/${item}`);
-      if (!listed || !listing) return { error: 'That listing is gone.' };
-      const left = Math.floor(Number(listing.qty) || 0);
-      if (left < qty) return { error: left > 0 ? `Only ${left} left.` : 'Sold out.' };
-      const key = `o${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-      const cents = toCents(listing.price) * qty;
-      // Both writes are applied before the first await: a second order sees the new stock.
-      const stock = write('listings', `${farm}/${item}`, { qty: left - qty });
-      const order = write('orders', key, {
-        farm,
-        item,
-        itemName: String(listing.name).trim(),
-        unit: String(listing.unit ?? 'each'),
-        qty,
-        cents,
-        fee: DELIVERY_CENTS,
-        customer: person.id,
-        address: person.address,
-        status: 'placed',
-        driver: '',
-        driverName: '',
-        placed: Date.now(),
+      if (!Number.isInteger(qty) || qty < 1 || qty > 99) return { error: 'Choose how many, from 1 to 99.' };
+      return words(await cart.add(person.id, `${farm}/${item}`, qty));
+    },
+
+    /** Set a cart line's quantity; 0 takes it out. */
+    async changeCart(person, form) {
+      if (person?.role !== 'customer') return { error: 'Choose a shopper to buy.' };
+      const qty = Number(form.get('qty'));
+      if (!Number.isInteger(qty) || qty < 0) return { error: 'Choose how many, from 1 to 99.' };
+      return words(await cart.set(person.id, String(form.get('item') ?? ''), qty));
+    },
+
+    /** A new checkout's key, made when the checkout page is: a second press is the same checkout. */
+    checkoutKey: () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
+
+    /**
+     * Check out the whole cart: stock from every farm taken at once, one charge, then one order
+     * per farm for the drivers to claim. All or nothing.
+     */
+    async checkout(person, form) {
+      if (person?.role !== 'customer') return { error: 'Choose a shopper to buy.' };
+      const key = String(form.get('checkout') ?? '');
+      if (!CHECKOUT_KEY.test(key)) return { error: 'That checkout has expired. Try again.' };
+      const address = String(form.get('address') ?? '').trim().slice(0, 200) || person.address;
+      const done = await checkout.place(person.id, {
+        key,
+        method: { card: String(form.get('card') ?? '') },
+        fields: { customer: person.id, address, driver: '', driverName: '', placed: Date.now() },
+        description: 'Tailgate order',
       });
-      await Promise.all([stock, order]);
-      return { ok: true, order: key };
+      return done.ok ? { ok: true, orders: done.orders } : words(done);
     },
 
     /** A driver claims an open delivery. Exactly one driver wins a race. */

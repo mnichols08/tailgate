@@ -3,8 +3,8 @@ export const people = {
   hilltop: { id: 'hilltop', role: 'farmer', farm: 'hilltop', name: 'Dana Whitlock' },
   meadow: { id: 'meadow', role: 'farmer', farm: 'meadow', name: 'Luis Ortega' },
   bearrun: { id: 'bearrun', role: 'farmer', farm: 'bearrun', name: 'June Harsh' },
-  rosa: { id: 'rosa', role: 'customer', name: 'Rosa Bittinger', address: '12 Main St, Oakland, MD' },
-  sam: { id: 'sam', role: 'customer', name: 'Sam Teets', address: '48 Ridge Rd, Davis, WV' },
+  rosa: { id: 'rosa', role: 'customer', name: 'Rosa Bittinger', address: '12 Main St, Oakland, MD', email: 'rosa@example.com' },
+  sam: { id: 'sam', role: 'customer', name: 'Sam Teets', address: '48 Ridge Rd, Davis, WV', email: 'sam@example.com' },
   jules: { id: 'jules', role: 'driver', name: 'Jules Friend' },
   kai: { id: 'kai', role: 'driver', name: 'Kai Sines' },
 };

@@ -50,8 +50,20 @@ async function as(who) {
       return { status: response.status(), body: text ? JSON.parse(text) : null };
     },
     get: async (path) => (await context.request.get(`${base}${path}`)).text(),
+    /** A plain form post (the cart's and checkout's routes): where it sends the browser. */
+    form: async (path, form) => {
+      const response = await context.request.post(`${base}${path}`, { form, maxRedirects: 0 });
+      return { status: response.status(), location: decodeURIComponent(response.headers().location ?? '') };
+    },
     close: () => context.close(),
   };
+}
+/** The checkout page's form fields, as a second device would post them. */
+async function checkoutForm(person, card = '4242 4242 4242 4242') {
+  const html = await person.get('/checkout');
+  const key = /name="checkout" value="([a-z0-9]+)"/.exec(html)?.[1];
+  assert.ok(key, 'the checkout page has a key');
+  return { checkout: key, name: 'Test', email: 'test@example.com', address: '1 Test Rd', card };
 }
 const until = async (check, what) => {
   for (let i = 0; i < 50; i++) {
@@ -66,8 +78,16 @@ test('without JavaScript: the market is complete and an order goes through', asy
   await page.goto(base);
   assert.deepEqual(await page.$$eval('farm-stall h3', (h) => h.map((x) => x.textContent)), ['Hilltop Farm', 'Meadow Creek', 'Bear Run Orchard']);
   assert.equal(await page.locator('produce-card h3').count(), 9);
+  assert.deepEqual(await page.$$eval('produce-card', (cards) => cards.map((card) => card.getAttribute('item'))), ['tomatoes', 'eggs', 'greens', 'honey', 'squash', 'beeswax', 'apples', 'cider', 'butter'], 'farm by farm, in the order each farm lists them');
   // Zubra UI's quantity-stepper can't submit itself without JavaScript; the form carries 1.
   await page.click('produce-card[item=beeswax] button[type=submit]');
+  await page.waitForURL(/\/cart/);
+  assert.match(await page.textContent('cart-panel'), /Beeswax candles/);
+  assert.match(await page.textContent('main'), /Added to your cart/);
+  await page.click('cart-panel a:has-text("Check out")');
+  await page.waitForURL(/\/checkout/);
+  await page.fill('checkout-form input[name=card]', '4242 4242 4242 4242');
+  await page.click('checkout-form button[type=submit]');
   await page.waitForURL(/\/orders/);
   assert.match(await page.textContent('order-card:has-text("Beeswax candles")'), /1 pair · Beeswax candles/);
   assert.match(await page.textContent('main'), /Order placed/, 'the result is said without JavaScript too');
@@ -84,6 +104,13 @@ test('with JavaScript: the stepper sets how many, and the order lands', async ()
   await card.locator('quantity-stepper button.more').click();
   await card.locator('quantity-stepper button.more').click();
   await card.locator('action-button button').click();
+  await page.waitForURL(/\/cart/);
+  await page.locator('toast-region', { hasText: 'Added to your cart' }).waitFor({ timeout: 5000 });
+  await page.locator('cart-panel output', { hasText: '3' }).waitFor();
+  await page.click('cart-panel a:has-text("Check out")');
+  await page.waitForURL(/\/checkout/);
+  await page.fill('checkout-form input[name=card]', '4242 4242 4242 4242');
+  await page.click('checkout-form button[type=submit]');
   await page.waitForURL(/\/orders/);
   await page.locator('order-card', { hasText: '3 half peck · Honeycrisp apples' }).waitFor();
   await page.locator('toast-region', { hasText: 'Order placed' }).waitFor({ timeout: 5000 });
@@ -93,16 +120,86 @@ test('with JavaScript: the stepper sets how many, and the order lands', async ()
 test('the last one goes to one customer', async () => {
   const rosa = await as('rosa');
   const sam = await as('sam');
-  const [a, b] = await Promise.all([
-    rosa.post('/_zb/action/produce-card/order', { farm: 'meadow', item: 'squash', qty: '1' }),
-    sam.post('/_zb/action/produce-card/order', { farm: 'meadow', item: 'squash', qty: '1' }),
-  ]);
-  const won = [a, b].filter((r) => r.status === 204 || r.body?.ok);
-  const lost = [a, b].filter((r) => r.body?.error);
+  // Both can put the last squash in a cart: nothing is taken until checkout.
+  for (const person of [rosa, sam]) assert.equal((await person.post('/_zb/action/produce-card/add', { farm: 'meadow', item: 'squash', qty: '1' })).status, 204);
+  const forms = [await checkoutForm(rosa), await checkoutForm(sam)];
+  const [a, b] = await Promise.all([rosa.form('/checkout', forms[0]), sam.form('/checkout', forms[1])]);
+  const won = [a, b].filter((r) => r.location === '/orders?done=placed');
+  const lost = [a, b].filter((r) => r.location.startsWith('/checkout?problem='));
   assert.equal(won.length, 1, JSON.stringify([a, b]));
-  assert.deepEqual(lost.map((r) => r.body.error), ['Sold out.']);
+  assert.deepEqual(lost.map((r) => r.location), ['/checkout?problem=Something in your cart sold out. Check your cart and try again.']);
+  // The loser's cart still has it, marked; the winner's is empty.
+  const carts = await Promise.all([rosa.get('/cart'), sam.get('/cart')]);
+  assert.equal(carts.filter((html) => /Only 0 left|No longer for sale/.test(html)).length, 1);
+  // Empty the loser's cart again, so the later tests start clean.
+  for (const person of [rosa, sam]) await person.form('/cart/change', { item: 'meadow/squash', qty: '0' });
   await rosa.close();
   await sam.close();
+});
+
+test('a cart from two farms is paid once, and goes out as one order per farm', async () => {
+  const sam = await as('sam');
+  const before = await sam.get('/');
+  const left = (html, item) => Number(new RegExp(`item="${item}"[^>]*qty="(\\d+)"`).exec(html)[1]);
+  assert.equal((await sam.post('/_zb/action/produce-card/add', { farm: 'hilltop', item: 'eggs', qty: '2' })).status, 204);
+  assert.equal((await sam.post('/_zb/action/produce-card/add', { farm: 'hilltop', item: 'tomatoes', qty: '1' })).status, 204);
+  assert.equal((await sam.post('/_zb/action/produce-card/add', { farm: 'meadow', item: 'beeswax', qty: '1' })).status, 204);
+  const cart = await sam.get('/cart');
+  assert.match(cart, /<dt>Delivery from Hilltop Farm<\/dt><dd>\$6\.00<\/dd>/);
+  assert.match(cart, /<dt>Delivery from Meadow Creek<\/dt><dd>\$6\.00<\/dd>/);
+  assert.match(cart, /Cart \(4\)/, 'the header counts what is in the cart');
+
+  // The same form sent twice (a double press, a retry) is one checkout.
+  const form = await checkoutForm(sam);
+  const sent = await Promise.all([sam.form('/checkout', form), sam.form('/checkout', form)]);
+  assert.ok(sent.some((r) => r.location === '/orders?done=placed'), JSON.stringify(sent));
+  assert.equal((await sam.form('/checkout', form)).location, '/orders?done=placed', 'sent again later: the same paid checkout');
+
+  const orders = await sam.get('/orders');
+  const docs = [...orders.matchAll(new RegExp(`<order-card doc="(${form.checkout}/[a-z]+)"`, 'g'))].map((m) => m[1]).sort();
+  assert.deepEqual(docs, [`${form.checkout}/hilltop`, `${form.checkout}/meadow`], 'one order per farm, once');
+  assert.match(orders, /item-name="Pasture eggs, Heirloom tomatoes" qty="3" unit="items" total="\$22\.50"/, 'both of Hilltop\'s lines on its one order, with its delivery');
+  assert.match(orders, /item-name="Beeswax candles" qty="1" unit="pair" total="\$15\.00"/, 'candles and their delivery');
+
+  const after = await sam.get('/');
+  assert.equal(left(after, 'eggs'), left(before, 'eggs') - 2);
+  assert.equal(left(after, 'tomatoes'), left(before, 'tomatoes') - 1);
+  assert.equal(left(after, 'beeswax'), left(before, 'beeswax') - 1);
+  assert.doesNotMatch(await sam.get('/cart'), /<li data-item/, 'the cart is empty');
+
+  // Each farm sees its own order, ready for a driver.
+  const hilltop = await as('hilltop');
+  assert.match(await hilltop.get('/farm/orders'), new RegExp(`doc="${form.checkout}/hilltop"`));
+  assert.doesNotMatch(await hilltop.get('/farm/orders'), new RegExp(`doc="${form.checkout}/meadow"`));
+  await hilltop.close();
+  const jules = await as('jules');
+  const open = await jules.get('/drive');
+  assert.match(open, new RegExp(`doc="${form.checkout}/hilltop"`));
+  assert.match(open, new RegExp(`doc="${form.checkout}/meadow"`));
+  await jules.close();
+  await sam.close();
+});
+
+test('a declined card takes nothing: the stock and the cart stay as they were', async () => {
+  const rosa = await as('rosa');
+  const before = await rosa.get('/');
+  assert.equal((await rosa.post('/_zb/action/produce-card/add', { farm: 'bearrun', item: 'cider', qty: '2' })).status, 204);
+  const declined = await rosa.form('/checkout', await checkoutForm(rosa, '4000 0000 0000 0002'));
+  assert.equal(declined.location, '/checkout?problem=That card was declined. Try another.');
+  assert.match(await rosa.get('/checkout?problem=That card was declined. Try another.'), /That card was declined/);
+  const qty = (html) => /item="cider"[^>]*qty="(\d+)"/.exec(html)[1];
+  assert.equal(qty(await rosa.get('/')), qty(before), 'the stock went back');
+  assert.match(await rosa.get('/cart'), /<li data-item="bearrun\/cider"/, 'still in the cart, to try another card');
+  // A key this server didn't make, and a post another site sends, change nothing.
+  assert.equal((await rosa.form('/checkout', { ...(await checkoutForm(rosa)), checkout: 'x/../y' })).location, '/checkout?problem=That checkout has expired. Try again.');
+  const context = await browser.newContext();
+  await context.request.post(`${base}/who`, { form: { who: 'rosa' }, maxRedirects: 0 });
+  const forged = await context.request.post(`${base}/checkout`, { form: await checkoutForm(rosa), headers: { 'sec-fetch-site': 'cross-site' }, maxRedirects: 0 });
+  assert.equal(forged.status(), 403);
+  await context.close();
+  await rosa.form('/cart/change', { item: 'bearrun/cider', qty: '0' });
+  assert.doesNotMatch(await rosa.get('/cart'), /<li data-item/);
+  await rosa.close();
 });
 
 test('a driver claims; the customer sees it live, and sees the driver looking', async () => {
@@ -171,6 +268,29 @@ test('a farmer edits stock offline; the market has it once they reconnect', asyn
   await farmer.context.close();
 });
 
+test('the market sells only what a farm lists, named, priced and counted', async () => {
+  const context = await browser.newContext();
+  await context.request.post(`${base}/who`, { form: { who: 'bearrun' }, maxRedirects: 0 });
+  const clock = () => `${String(Date.now()).padStart(15, '0')}-00000-test`;
+  const write = (key, fields) =>
+    context.request.post(`${base}/_zb/sync/push`, {
+      headers: { 'sec-fetch-site': 'same-origin' },
+      data: { changes: Object.entries(fields).map(([field, value]) => ({ collection: 'listings', key, field, value, clock: clock() })) },
+    });
+  // Written, but not on the farm's list: not for sale.
+  assert.equal((await write('bearrun/pears', { name: 'Seckel pears', unit: 'quart', price: 6, qty: 10 })).status(), 200);
+  // On the list (the butter row), but with no count: none left, not "no limit".
+  assert.equal((await write('bearrun/butter', { qty: null })).status(), 200);
+  await new Promise((done) => setTimeout(done, 200));
+  const market = await (await fetch(base)).text();
+  assert.doesNotMatch(market, /item="pears"/, 'unlisted');
+  assert.doesNotMatch(market, /item="butter"/, 'no count is none left');
+  const rosa = await as('rosa');
+  assert.deepEqual((await rosa.post('/_zb/action/produce-card/add', { farm: 'bearrun', item: 'pears', qty: '1' })).body, { error: 'That listing is gone.' });
+  await rosa.close();
+  await context.close();
+});
+
 test('a farmer restyles their stall; shoppers see it change as it happens', async () => {
   const shopper = await device('sam');
   await shopper.page.goto(base);
@@ -221,7 +341,13 @@ test('each person writes only what is theirs', async () => {
   assert.equal((await push('listings', 'hilltop/eggs')).status(), 403);
   assert.equal((await push('brands', 'hilltop', 'color')).status(), 403);
   assert.equal((await push('orders', 'anything', 'status')).status(), 403);
+  for (const collection of ['carts', 'checkouts', 'payments']) assert.equal((await push(collection, 'meadow', 'status')).status(), 403, collection);
   await context.close();
+  // Only a shopper fills a cart.
+  const farmer = await as('meadow');
+  assert.deepEqual((await farmer.post('/_zb/action/produce-card/add', { farm: 'hilltop', item: 'eggs', qty: '1' })).body, { error: 'Choose a shopper to buy.' });
+  assert.equal((await farmer.form('/cart/change', { item: 'hilltop/eggs', qty: '1' })).location, '/cart?problem=Choose a shopper to buy.');
+  await farmer.close();
 });
 
 test('every screen renders for the person it is for', async () => {
@@ -233,6 +359,7 @@ test('every screen renders for the person it is for', async () => {
     ['jules', '/drive', ['stat-card', 'delivery-actions']],
     ['jules', '/drive/earnings', ['bar-chart']],
     ['rosa', '/orders', ['order-card']],
+    ['rosa', '/cart', ['cart-panel']],
     ['rosa', '/farms/hilltop', ['farm-stall', 'produce-card']],
   ];
   for (const [who, path, tags] of screens) {
@@ -254,6 +381,6 @@ test('server code never reaches the browser', async () => {
     assert.equal(response.status, 200, path);
     const source = await response.text();
     assert.match(source, /customElements\.define|define\(/, `${path} is the element module`);
-    assert.doesNotMatch(source, /use server|placeOrder|context\.market|advance\(/, path);
+    assert.doesNotMatch(source, /use server|addToCart|context\.market|advance\(/, path);
   }
 });

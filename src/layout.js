@@ -5,6 +5,7 @@ export const escape = (value) =>
 
 /** What a finished action says, as a toast (or, without JavaScript, a banner). */
 export const DONE = {
+  added: 'Added to your cart.',
   placed: 'Order placed. A driver will pick it up soon.',
   claimed: 'Delivery claimed. Pick it up at the farm.',
   picked: 'Marked as picked up. The customer can see you’re on the way.',
@@ -125,8 +126,8 @@ function head(title) {
 }
 
 /** A public page: the header, the page, a footer. */
-export function layout({ title, path, person, banner = '', body, actionsScript, done, avatar = '' }) {
-  const nav = [['/', 'Market'], ...(person?.role === 'customer' ? [['/orders', 'My orders']] : []), ...(person?.role === 'farmer' ? [['/farm', 'My farm']] : []), ...(person?.role === 'driver' ? [['/drive', 'My deliveries']] : [])];
+export function layout({ title, path, person, banner = '', body, actionsScript, done, avatar = '', cartCount = 0 }) {
+  const nav = [['/', 'Market'], ...(person?.role === 'customer' ? [['/cart', cartCount ? `Cart (${cartCount})` : 'Cart'], ['/orders', 'My orders']] : []), ...(person?.role === 'farmer' ? [['/farm', 'My farm']] : []), ...(person?.role === 'driver' ? [['/drive', 'My deliveries']] : [])];
   return `${head(title)}
 <body>
   <header class="site-head">
@@ -142,7 +143,7 @@ export function layout({ title, path, person, banner = '', body, actionsScript, 
     ${banner}
     ${body}
   </main>
-  <footer class="site-foot">Tailgate is a demo by <a href="https://potomac.solutions">Potomac Solutions</a>, built with <a href="https://github.com/journey-to-code-org/zubra">Zubra</a> and Zubra UI. Pay on delivery; nothing here is really for sale.</footer>
+  <footer class="site-foot">Tailgate is a demo by <a href="https://potomac.solutions">Potomac Solutions</a>, built with <a href="https://github.com/journey-to-code-org/zubra">Zubra</a> and Zubra UI. Checkout is in test mode; nothing here is really for sale.</footer>
   <toast-region></toast-region>
   ${actionsScript}
   ${SCRIPT(done)}
