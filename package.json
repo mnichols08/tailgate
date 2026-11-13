@@ -13,11 +13,11 @@
     "@fontsource/barlow-condensed": "^5.3.0",
     "@fontsource/source-sans-3": "^5.3.1",
     "@potomac-solutions/kit": "github:Potomac-Solutions/kit#2254343f31b034c331e10ff418269313bf0d3b40",
-    "@zubra/actions": "5.11.0",
-    "@zubra/compiler": "5.11.0",
-    "@zubra/runtime": "5.11.0",
-    "@zubra/server": "5.11.0",
-    "@zubra/sync": "5.11.0"
+    "@zubra/actions": "5.12.0",
+    "@zubra/compiler": "5.12.0",
+    "@zubra/runtime": "5.12.0",
+    "@zubra/server": "5.12.0",
+    "@zubra/sync": "5.12.0"
   },
   "devDependencies": {
     "playwright": "1.63.0"
