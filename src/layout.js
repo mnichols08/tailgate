@@ -39,7 +39,7 @@ const STYLE = `
   h1, main.page h2, .app-body h2 { font-family: var(--font-heading); font-weight: 700; line-height: 1.05; letter-spacing: -0.005em; margin: 0; }
   main.page h1 { font-size: clamp(2.25rem, 5vw, 3.5rem); }
   main.page h2 { font-size: 1.75rem; }
-  a { color: inherit; }
+  a:not(.action-button) { color: inherit; }
   :focus-visible { outline: 3px solid var(--tg-amber); outline-offset: 2px; }
 
   .site-head { display: flex; align-items: center; gap: 1.5rem; padding: 0.85rem clamp(1rem, 4vw, 2.5rem); background: var(--tg-ink); color: #f1f5f2; }
