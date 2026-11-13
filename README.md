@@ -66,6 +66,16 @@ npm test             # the walk below, in Chromium (run `npx playwright install 
 
 Start at `/start` and pick who you are. Accounts come later; the demo seeds three farms, two shoppers, two drivers, three weeks of order history and a few orders on the way.
 
+## Try it
+
+`npm install`, then `npm start`, and open http://localhost:3000. Use two browser windows (one private), so you can be two people at once.
+
+1. **Shop.** At `/start`, shop as Rosa. Add something from Hilltop Farm and something from Meadow Creek. The cart shows one delivery fee per farm.
+2. **Pay once.** Check out with any card number (`4000 0000 0000 0002` is declined, to see that). My orders shows one order per farm, each waiting for a driver.
+3. **Deliver.** In the other window, drive as Jules. Claim one of Rosa's orders, then press Picked up and Delivered. Rosa's page follows each step without a reload, and shows when Jules has the order open.
+4. **Sell.** Switch to a farmer (Luis at Meadow Creek). Change stock on the Stock page, even offline: the market has it once you reconnect. Restyle the stall on Storefront, and the market changes as you do.
+5. **Without JavaScript** (turn it off in the browser's settings), the market, the cart and checkout all still work.
+
 ## What the tests prove
 
 1. Without JavaScript, the market is complete, in each farm's order, and an item goes into the cart, through checkout and onto My orders, and each page says what happened.
