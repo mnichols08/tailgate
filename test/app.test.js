@@ -7,6 +7,13 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { createApp } from '../server.js';
 
+// A redirect's location as words: the signature on its message (kit/notice) checked and taken off.
+const plain = (location) => {
+  location = String(location ?? '');
+  if (/[?&]problem=/.test(location)) assert.match(location, /&sig=[\w-]{22}/, `unsigned message: ${location}`);
+  return decodeURIComponent(location.replace(/&sig=[\w-]+/, '').replaceAll('+', ' '));
+};
+
 const dir = mkdtempSync(join(tmpdir(), 'tailgate-'));
 let server;
 let base;
@@ -55,7 +62,7 @@ async function as(who) {
     /** A plain form post (the cart's and checkout's routes): where it sends the browser. */
     form: async (path, form) => {
       const response = await context.request.post(`${base}${path}`, { form, maxRedirects: 0 });
-      return { status: response.status(), location: decodeURIComponent(response.headers().location ?? '') };
+      return { status: response.status(), location: plain(response.headers().location ?? ''), raw: response.headers().location ?? '' };
     },
     close: () => context.close(),
   };
@@ -188,7 +195,8 @@ test('a declined card takes nothing: the stock and the cart stay as they were', 
   assert.equal((await rosa.post('/_zb/action/produce-card/add', { farm: 'bearrun', item: 'cider', qty: '2' })).status, 204);
   const declined = await rosa.form('/checkout', await checkoutForm(rosa, '4000 0000 0000 0002'));
   assert.equal(declined.location, '/checkout?problem=That card was declined. Try another.');
-  assert.match(await rosa.get('/checkout?problem=That card was declined. Try another.'), /That card was declined/);
+  assert.match(await rosa.get(declined.raw), /That card was declined/, 'the redirect shows the message');
+  assert.doesNotMatch(await rosa.get(`/checkout?problem=${encodeURIComponent('That card was declined. Call 555-0100.')}`), /555-0100/, 'words typed into a link don’t');
   const qty = (html) => /item="cider"[^>]*qty="(\d+)"/.exec(html)[1];
   assert.equal(qty(await rosa.get('/')), qty(before), 'the stock went back');
   assert.match(await rosa.get('/cart'), /<li data-item="bearrun\/cider"/, 'still in the cart, to try another card');

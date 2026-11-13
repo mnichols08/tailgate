@@ -18,6 +18,7 @@ import { createZubra } from '@zubra/server';
 import { createActions } from '@zubra/actions';
 import { createMarket, THEMES } from './src/market.js';
 import { sessions } from './src/session.js';
+import { createNotices } from '@potomac-solutions/kit/notice';
 import { layout, appLayout, escape, DONE } from './src/layout.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -81,7 +82,10 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
   });
   const files = assets();
 
-  const back = (res, location) => (res.writeHead(303, { location }), res.end());
+  // A message in an address shows only if the server signed it (kit/notice), so a link can't put
+  // its own words in a page's alert.
+  const notices = createNotices({ secret });
+  const back = (res, location) => (res.writeHead(303, { location: notices.sign(location) }), res.end());
 
   /** A small urlencoded form, or null when it's bigger than any of Tailgate's forms. */
   async function readForm(req) {
@@ -371,7 +375,7 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
       }
 
       // A problem the cart or checkout sent back with (one of the market's own sentences).
-      const problem = (url.searchParams.get('problem') ?? '').slice(0, 200);
+      const problem = notices.read(url).problem;
 
       if (url.pathname === '/cart') {
         if (person?.role !== 'customer') return page(req, res, url, { title: 'Cart', person, p, body: ask(p, 'shopper', 'fill a cart') });
