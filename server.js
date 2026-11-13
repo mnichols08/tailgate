@@ -4,8 +4,10 @@
 // - Farmers' stock, each farm's storefront, and every order's live status are Sync documents
 //   (@zubra/sync) in one SQLite log, which src/market.js also reads, so the server always knows
 //   the current state.
-// - Anything two people could both want (ordering the last crate, claiming a delivery) is a
+// - Anything two people could both want (adding the last crate, claiming a delivery) is a
 //   'use server' function (@zubra/actions): a plain form post, with or without JavaScript.
+// - The cart and checkout are the Potomac kit's catalog, cart, checkout, pay and stages
+//   (src/market.js), shown by the kit's cart-panel and checkout-form from the package.
 // - The controls, charts, dashboards and themes are Zubra UI, installed with `npx shadcn add`.
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -70,12 +72,26 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
   const session = sessions({ secret, people: market.people });
   market.identify((request) => session.fromRequest(request));
 
-  const zubra = createZubra({ components, cache });
+  // The kit's components come from the package. Where Tailgate has its own copy of a part they
+  // use (action-button, text-field…), Tailgate's is used for both (Zubra 5.10).
+  const zubra = createZubra({ components, cache, packages: ['@potomac-solutions/kit/components'] });
   const actions = await createActions({
     components,
     context: ({ request }) => ({ market, person: session.fromRequest(request) }),
   });
   const files = assets();
+
+  const back = (res, location) => (res.writeHead(303, { location }), res.end());
+
+  /** A small urlencoded form, or null when it's bigger than any of Tailgate's forms. */
+  async function readForm(req) {
+    let body = '';
+    for await (const chunk of req) {
+      body += chunk;
+      if (body.length > 4000) return null;
+    }
+    return new URLSearchParams(body);
+  }
 
   function send(res, status, html, headers = {}) {
     res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', ...headers });
@@ -100,7 +116,8 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
     const { banner, done } = outcome(req, res, p, url);
     const avatar = person ? p.render('user-avatar', { name: person.name, size: 'sm' }) : '';
     const toasts = p.render('toast-region', {});
-    const html = layout({ title, path: url.pathname, person, banner, body, done, avatar, actionsScript: actions.script() }).replace('<toast-region></toast-region>', toasts);
+    const cartCount = person?.role === 'customer' ? market.cart(person).count : 0;
+    const html = layout({ title, path: url.pathname, person, banner, body, done, avatar, cartCount, actionsScript: actions.script() }).replace('<toast-region></toast-region>', toasts);
     send(res, 200, p.finish(html));
   }
 
@@ -263,6 +280,21 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
       }
       const person = session.read(req.headers.cookie ?? '');
 
+      // The cart's and checkout's forms are the kit's components, posting to plain routes. The
+      // session cookie is SameSite=Lax, so another site's form arrives signed out; a browser that
+      // says the post is cross-site is refused as well.
+      if (req.method === 'POST' && (url.pathname === '/cart/change' || url.pathname === '/checkout')) {
+        if (req.headers['sec-fetch-site'] === 'cross-site') return send(res, 403, 'Forbidden');
+        const form = await readForm(req);
+        if (!form) return send(res, 413, 'Too large');
+        if (url.pathname === '/cart/change') {
+          const done = await market.changeCart(person, form);
+          return back(res, done.error ? `/cart?problem=${encodeURIComponent(done.error)}` : '/cart');
+        }
+        const done = await market.checkout(person, form);
+        return back(res, done.error ? `/checkout?problem=${encodeURIComponent(done.error)}` : '/orders?done=placed');
+      }
+
       if (url.pathname === '/who' && req.method === 'POST') {
         let body = '';
         for await (const chunk of req) {
@@ -301,7 +333,7 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
           body: `<style>.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1.25rem}.role{display:grid;gap:.6rem;align-content:start;padding:1.5rem;border-radius:var(--radius);background:var(--card);box-shadow:0 0 0 1px var(--tg-line);border-top:6px solid var(--tg-pine)}.role:nth-child(2){border-top-color:#9b2d20}.role:nth-child(3){border-top-color:var(--tg-amber)}.role p{margin:0;color:var(--tg-muted)}.as{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.4rem}</style>
 <section><h1>Who are you today?</h1><p class="lede">Tailgate is a demo with no accounts yet. Pick someone and see the market as they do. Switch any time from the top of the page.</p></section>
 <div class="roles">
-  ${role('Shop', 'Order from farms nearby. A neighbour drives it to your door, and you pay when it arrives.', ['rosa', 'sam'], 'Shop')}
+  ${role('Shop', 'Fill a cart from farms nearby and pay once. A neighbour drives each farm’s order to your door.', ['rosa', 'sam'], 'Shop')}
   ${role('Sell', 'List what you have, set your prices, and dress your stall in your own colours and logo.', ['hilltop', 'meadow', 'bearrun'], 'Sell')}
   ${role('Drive', 'Claim deliveries on your way, pick up at the farm, and earn $6 for each one.', ['jules', 'kai'], 'Drive')}
 </div>`,
@@ -338,6 +370,35 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
         });
       }
 
+      // A problem the cart or checkout sent back with (one of the market's own sentences).
+      const problem = (url.searchParams.get('problem') ?? '').slice(0, 200);
+
+      if (url.pathname === '/cart') {
+        if (person?.role !== 'customer') return page(req, res, url, { title: 'Cart', person, p, body: ask(p, 'shopper', 'fill a cart') });
+        const view = market.cart(person);
+        return page(req, res, url, {
+          title: 'Your cart',
+          person,
+          p,
+          body: `<section><h1>Your cart</h1><p class="lede">Fill it from as many farms as you like and pay once. Each farm’s goods come as their own delivery.</p></section>
+${problem ? render(p, 'alert-banner', { variant: 'danger' }, { default: escape(problem) }) : ''}
+<section class="cart">${p.render('cart-panel', { cart: view, fees: view.fees, change: '/cart/change', checkout: '/checkout', heading: 'In your cart' })}<p><a href="/">Keep shopping</a></p></section>`,
+        });
+      }
+
+      if (url.pathname === '/checkout') {
+        if (person?.role !== 'customer') return page(req, res, url, { title: 'Checkout', person, p, body: ask(p, 'shopper', 'check out') });
+        const view = market.cart(person);
+        if (!view.lines.length) return back(res, '/cart');
+        return page(req, res, url, {
+          title: 'Checkout',
+          person,
+          p,
+          body: `<section><h1>Checkout</h1><p class="lede">One payment for everything. Each farm’s order goes out to the drivers as soon as it’s paid.</p></section>
+<section class="checkout">${p.render('checkout-form', { cart: view, fees: view.fees, place: '/checkout', checkout: market.checkoutKey(), delivery: true, problem, testMode: true, name: person.name, email: person.email ?? '', address: person.address })}<p><a href="/cart">Back to your cart</a></p></section>`,
+        });
+      }
+
       if (url.pathname === '/orders') {
         if (person?.role !== 'customer') return page(req, res, url, { title: 'Orders', person, p, body: ask(p, 'shopper', 'see their orders') });
         const all = market.ordersFor(person);
@@ -347,7 +408,7 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
           title: 'My orders',
           person,
           p,
-          body: `<section><h1>My orders</h1><p class="lede">Delivering to ${escape(person.address)}. You pay the driver when it arrives.</p></section>
+          body: `<section><h1>My orders</h1><p class="lede">Each farm’s order is its own delivery. They update by themselves as drivers move them along.</p></section>
 <section><div class="section-head"><h2>On the way</h2><p>These update by themselves.</p></div><div class="stack">${active.map((order) => p.render('order-card', card(order, 'customer'))).join('') || render(p, 'empty-state', { heading: 'Nothing on the way' }, { default: 'Order something from the market and follow it here.', actions: p.render('action-button', { href: '/' }, { default: 'Go to the market' }) })}</div></section>
 ${past.length ? `<section><div class="section-head"><h2>Earlier orders</h2></div><div class="stalls" style="grid-template-columns:repeat(auto-fill,minmax(16rem,1fr))">${past.map((order) => p.render('order-card', card(order, 'customer', true))).join('')}</div></section>` : ''}`,
         });
