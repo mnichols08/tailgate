@@ -21,7 +21,7 @@ let browser;
 const errors = [];
 
 before(async () => {
-  server = await createApp({ db: join(dir, 'tailgate.db'), cache: false, secret: 'test' });
+  server = await createApp({ db: join(dir, 'tailgate.db'), cache: false, secret: 'test-secret-of-at-least-thirty-two-characters' });
   await new Promise((done) => server.listen(0, done));
   base = `http://localhost:${server.address().port}`;
   // Playwright's own Chromium when it is installed; otherwise the machine's Chrome.

@@ -67,7 +67,8 @@ function assets() {
 export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailgate.db'), cache = true, secret = process.env.SESSION_SECRET } = {}) {
   if (!secret) {
     if (process.env.NODE_ENV === 'production') throw new Error('Set SESSION_SECRET.');
-    secret = 'tailgate-development-only';
+    // The kit signs nothing with a secret under 32 characters.
+    secret = 'tailgate-development-only-not-a-secret';
   }
   const market = await createMarket({ db });
   const session = sessions({ secret, people: market.people });
