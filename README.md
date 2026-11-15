@@ -9,7 +9,10 @@ Tailgate is a showcase for [Zubra](https://github.com/journey-to-code-org/zubra)
 | Who | Screen | What's on it |
 | --- | --- | --- |
 | Anyone | **Start** (`/start`) | Pick who you are: a shopper, a farmer or a driver |
-| Anyone | **Market** (`/`) | Each farm's stall, in its own colours, logo and theme, and everything for sale, filterable by farm |
+| Anyone | **Market** (`/`) | What Tailgate is, then each farm's stall, in its own colours, logo and theme, and everything for sale, filterable by farm |
+| Shopper | **Account** (`/account`) | Sign up, sign in, a forgotten password; what's on the way and what you've spent |
+| Market staff | **Admin** (`/admin`) | Sales across every farm against the month before, orders waiting for a driver, delivery times, stock running low, staff activity; orders (search, filters, CSV), farms, drivers and shoppers |
+| Market owner | **Reports** (`/admin/reports`) | Sales by day, week or month, to the farms and to the drivers, by farm, what sold, when people order; CSV |
 | Anyone | **Storefront** (`/farms/:farm`) | One farm's stall and goods, the whole page in the farm's theme |
 | Shopper | **Cart** (`/cart`) | What's in the cart, from any number of farms, with a delivery fee per farm and the total |
 | Shopper | **Checkout** (`/checkout`) | One payment for the whole cart (test mode: no money moves) |
@@ -64,7 +67,9 @@ npm start            # http://localhost:3000
 npm test             # the walk below, in Chromium (run `npx playwright install chromium` once)
 ```
 
-Start at `/start` and pick who you are. Accounts come later; the demo seeds three farms, two shoppers, two drivers, three weeks of order history and a few orders on the way.
+Start at `/start` and pick who you are, or make a shopper account. A fresh market seeds three farms, two demo shoppers, two drivers, three weeks of order history and a few orders on the way.
+
+`npm run demo` adds the people who run the market and thirty shopper accounts with four months of orders, and starts it. It prints the sign-ins, for this machine only: the market's owner `owner@example.com` / `tailgate-owner-demo` and its staff `support@example.com` / `tailgate-staff-demo` at `/admin`, and a shopper, `riley@example.com` / `tailgate-shopper-demo`. `npm start` alone keeps what's there; with no admin yet it prints a setup link for the first. `npm run seed -- --fresh` starts over.
 
 ## Try it
 
@@ -74,7 +79,9 @@ Start at `/start` and pick who you are. Accounts come later; the demo seeds thre
 2. **Pay once.** Check out with any card number (`4000 0000 0000 0002` is declined, to see that). My orders shows one order per farm, each waiting for a driver.
 3. **Deliver.** In the other window, drive as Jules. Claim one of Rosa's orders, then press Picked up and Delivered. Rosa's page follows each step without a reload, and shows when Jules has the order open.
 4. **Sell.** Switch to a farmer (Luis at Meadow Creek). Change stock on the Stock page, even offline: the market has it once you reconnect. Restyle the stall on Storefront, and the market changes as you do.
-5. **Without JavaScript** (turn it off in the browser's settings), the market, the cart and checkout all still work.
+5. **An account.** **Sign in**, or make an account, and shop as yourself: checkout fills in your name and email, and your orders are there on any device. **Forgot your password?** sends a one-time link (to the admin's **Outbox**, and the server's log).
+6. **Run the market.** At `/admin`, sign in as the owner: sales across every farm, orders waiting for a driver, how long deliveries take, what's running low, every order (searchable, as CSV), each farm, driver and shopper, and the reports.
+7. **Without JavaScript** (turn it off in the browser's settings), the market, the cart and checkout all still work.
 
 ## What the tests prove
 
@@ -91,6 +98,18 @@ Start at `/start` and pick who you are. Accounts come later; the demo seeds thre
 11. Every screen renders for the person it is for, and the wrong person gets a way in rather than a broken page.
 12. The `'use server'` code is absent from the component modules the browser loads.
 
+Shopper accounts and the market's admin (`test/admin.test.js`, over plain HTTP):
+
+13. The market leads with what Tailgate is, then the farms and what's for sale; a guest sees no admin link.
+14. A shopper makes an account, fills a cart and checks out; the order is the account's and carries their name; signed in on another device the orders are there, and signed out they aren't.
+15. No page can read shopper or staff accounts, sessions, reset tokens or the admin's activity from the live log, even when it asks.
+16. A forgotten password gets the same page whether or not the account exists; the emailed link works once.
+17. The admin is for the market's staff, not the demo's farmers or guests; staff get no reports or outbox (403); owners get them.
+18. Orders search; the report's CSV adds up to the orders placed in its range; a name starting with `=` opens in a spreadsheet as text.
+19. An owner turns a shopper off and they're signed out; staff can't turn them back on.
+
+Writing test 18 found a bug: an order paid at checkout had no time placed (the kit's `stages` keeps `placed` for itself), so it couldn't be dated. `placed` is now stamped when an order starts.
+
 ## Deploy on Railway
 
 1. Create a service from this repository. `railway.json` sets the start command and a `/health` check.
@@ -100,9 +119,9 @@ Start at `/start` and pick who you are. Accounts come later; the demo seeds thre
 
 ## Not yet
 
-- Accounts. A visitor picks who they are; a signed cookie holds the choice.
+- Accounts for farmers and drivers. Shoppers can make one; farmers and drivers are still picked on the start page, and a signed cookie holds the choice.
 - Real payments. Checkout uses the kit's test provider: any card works except 4000 0000 0000 0002, which is declined.
 - Maps. Drivers get directions links to the farm and the door. An in-app map, using Garrett County Adventures as a reference, is next.
 - The market's farm filter and product cards show a farm's new name after a reload; its stall updates live.
-- Read rules. Anyone signed in can follow any order's live status.
+- Read rules. Anyone signed in can follow any order's live status. (Accounts, sessions and tokens are the exception: no page reads them.)
 - Motion. List rows will use Zubra's `animate` once it ships in a release; until then they fade in with CSS.

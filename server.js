@@ -17,8 +17,15 @@ import { fileURLToPath } from 'node:url';
 import { createZubra } from '@zubra/server';
 import { createActions } from '@zubra/actions';
 import { createMarket, THEMES } from './src/market.js';
+import { money } from './src/account.js';
 import { sessions } from './src/session.js';
 import { createNotices } from '@potomac-solutions/kit/notice';
+import { createCustomers } from '@potomac-solutions/kit/customers';
+import { createStaff } from '@potomac-solutions/kit/staff';
+import { staffPages, clientAddress } from '@potomac-solutions/kit/staff/pages';
+import { createNotify, outbox } from '@potomac-solutions/kit/notify';
+import * as accountPages from './src/account.js';
+import { createAdmin } from './src/admin.js';
 import { layout, appLayout, escape, DONE } from './src/layout.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -64,21 +71,46 @@ function assets() {
   return files;
 }
 
-export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailgate.db'), cache = true, secret = process.env.SESSION_SECRET } = {}) {
+export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailgate.db'), cache = true, secret = process.env.SESSION_SECRET, staffCost, now = Date.now } = {}) {
   if (!secret) {
     if (process.env.NODE_ENV === 'production') throw new Error('Set SESSION_SECRET.');
     secret = 'tailgate-development-only';
   }
   const market = await createMarket({ db });
   const session = sessions({ secret, people: market.people });
-  market.identify((request) => session.fromRequest(request));
+  const production = process.env.NODE_ENV === 'production';
+  const cost = staffCost ? { cost: staffCost } : {};
+  // Shoppers who make an account (kit/customers), and the people who run the market (kit/staff):
+  // both in the market's own log, in collections no page can read.
+  const customers = createCustomers({ store: market.store, secure: production, now, ...cost });
+  const staff = createStaff({ store: market.store, secure: production, now, ...cost });
+  market.names((id) => customers.get(id)?.name ?? '');
+  /**
+   * Who is asking, from a Cookie header: a shopper signed in to their account, or the demo person
+   * picked on the start page.
+   */
+  function personOf(cookie = '') {
+    const one = customers.session(cookie);
+    if (one) return { id: one.customer, role: 'customer', name: one.name, email: one.email, address: '', account: true };
+    return session.read(cookie);
+  }
+  market.identify((request) => personOf(request.headers.get('cookie') ?? ''));
+  // Email goes to an outbox the owner can read: this demo sends nothing for real.
+  const mail = outbox();
+  const notify = createNotify({
+    send: mail.send,
+    templates: { reset: ({ name, link }) => ({ subject: 'Reset your Tailgate password', body: `Hi ${name},\n\nThis link sets a new password. It works once, for an hour:\n${link}\n\nIf it wasn’t you, ignore this email.` }) },
+  });
+  const proxies = Number(process.env.TRUST_PROXIES ?? 0);
+  const origin = (req) => process.env.PUBLIC_URL || `http://${req.headers.host ?? 'localhost'}`;
+  const admin = createAdmin({ market, customers, sent: mail.sent, now });
 
   // The kit's components come from the package. Where Tailgate has its own copy of a part they
   // use (action-button, text-field…), Tailgate's is used for both (Zubra 5.10).
   const zubra = createZubra({ components, cache, packages: ['@potomac-solutions/kit/components'] });
   const actions = await createActions({
     components,
-    context: ({ request }) => ({ market, person: session.fromRequest(request) }),
+    context: ({ request }) => ({ market, person: personOf(request.headers.get('cookie') ?? '') }),
   });
   const files = assets();
 
@@ -86,6 +118,15 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
   // its own words in a page's alert.
   const notices = createNotices({ secret });
   const back = (res, location) => (res.writeHead(303, { location: notices.sign(location) }), res.end());
+  const withDone = (path, words) => `${path}${path.includes('?') ? '&' : '?'}done=${encodeURIComponent(words)}`;
+  const withProblem = (path, words) => `${path}${path.includes('?') ? '&' : '?'}problem=${encodeURIComponent(words)}`;
+  const said = (url) => {
+    const { problem, done } = notices.read(url);
+    return `${problem ? `<p class="notice" role="alert">${escape(problem)}</p>` : ''}${done && !/^[a-z]+$/.test(done) ? `<p class="ok" role="status">${escape(done)}</p>` : ''}`;
+  };
+  const downloadCsv = (res, name, text) => (res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${name}"`, 'cache-control': 'no-store' }), res.end(text));
+  // The market's staff: sign-in, invites, people and passwords are the kit's pages.
+  const staffSite = staffPages({ staff, notices, proxies, home: '/admin', business: 'Tailgate', secure: production, render: (res, title, body) => send(res, 200, zubra.page().finish(layout({ title, path: '', person: null, body, actionsScript: actions.script() }))) });
 
   /** A small urlencoded form, or null when it's bigger than any of Tailgate's forms. */
   async function readForm(req) {
@@ -116,13 +157,13 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
     return { banner, done };
   }
 
-  function page(req, res, url, { title, person, body, p }) {
+  function page(req, res, url, { title, person, body, p, wide = false, status = 200 }) {
     const { banner, done } = outcome(req, res, p, url);
     const avatar = person ? p.render('user-avatar', { name: person.name, size: 'sm' }) : '';
     const toasts = p.render('toast-region', {});
     const cartCount = person?.role === 'customer' ? market.cart(person).count : 0;
-    const html = layout({ title, path: url.pathname, person, banner, body, done, avatar, cartCount, actionsScript: actions.script() }).replace('<toast-region></toast-region>', toasts);
-    send(res, 200, p.finish(html));
+    const html = layout({ title, path: url.pathname, person, banner, body, done, avatar, cartCount, staff: staff.can(staff.session(req), 'staff'), wide, actionsScript: actions.script() }).replace('<toast-region></toast-region>', toasts);
+    send(res, status, p.finish(html));
   }
 
   /** A dashboard, in `color`: the farm's own for farmers, Tailgate's amber for drivers. */
@@ -282,7 +323,82 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
         res.writeHead(200, { 'content-type': file[0], 'cache-control': 'public, max-age=86400' });
         return res.end(file[1]);
       }
-      const person = session.read(req.headers.cookie ?? '');
+      const person = personOf(req.headers.cookie ?? '');
+      const account = person?.account ? customers.get(person.id) : null;
+      const who = staff.session(req);
+      const atDesk = staff.can(who, 'staff');
+      const owner = staff.can(who, 'owner');
+      if (url.pathname.startsWith('/account') || url.pathname.startsWith('/admin')) res.setHeader('cache-control', 'no-store');
+
+      // A shopper's account, the admin's changes, and the staff's sign-in: plain form posts.
+      if (req.method === 'POST' && (url.pathname.startsWith('/account/') || url.pathname.startsWith('/admin/') || url.pathname.startsWith('/staff/'))) {
+        if (req.headers['sec-fetch-site'] === 'cross-site') return send(res, 403, 'Forbidden');
+        const form = await readForm(req);
+        if (!form) return send(res, 413, 'Too large');
+        const p = zubra.page();
+        const problem = (words) => `<p class="notice" role="alert">${escape(words)}</p>`;
+        const show = (title, body, status) => page(req, res, url, { title, person, p, body, status });
+        if (url.pathname === '/account/sign-up') {
+          const made = await customers.signUp({ email: form.get('email'), name: form.get('name'), password: form.get('password') });
+          if (made.error) return show('Make an account', accountPages.signUp({ problem: problem(made.error), form }), 422);
+          res.setHeader('set-cookie', made.cookie);
+          return back(res, withDone('/account', 'Welcome. Your account is ready.'));
+        }
+        if (url.pathname === '/account/sign-in') {
+          const signed = await customers.signIn(form.get('email'), form.get('password'), { client: clientAddress(req, { proxies }) });
+          if (signed.error) return show('Sign in', accountPages.signIn({ problem: problem(signed.error === 'locked' ? 'Too many tries. Wait 15 minutes, or reset your password.' : 'That email and password don’t match.'), email: String(form.get('email') ?? '') }), 401);
+          res.setHeader('set-cookie', signed.cookie);
+          return back(res, '/account');
+        }
+        if (url.pathname === '/account/sign-out') {
+          res.setHeader('set-cookie', (await customers.signOut(req)).cookie);
+          return back(res, '/');
+        }
+        if (url.pathname === '/account/forgot') {
+          const email = String(form.get('email') ?? '').trim().toLowerCase();
+          const raw = await customers.resetToken(email);
+          const one = raw && customers.list().find((c) => c.email === email);
+          if (one) {
+            const link = `${origin(req)}/account/reset?token=${raw}`;
+            await notify.notify({ email: one.email }, 'reset', { name: one.name, link });
+            if (!production) console.log(`Password reset for ${one.email}: ${link}`);
+          }
+          return show('Reset your password', accountPages.forgot({ sent: true }));
+        }
+        if (url.pathname === '/account/reset') {
+          const raw = String(form.get('token') ?? '');
+          const reset = await customers.reset(raw, form.get('password'));
+          if (reset.error) return show('Choose a new password', accountPages.reset({ token: raw, problem: problem(reset.error), works: customers.peek(raw) }), 422);
+          res.setHeader('set-cookie', reset.cookie);
+          return back(res, withDone('/account', 'Your new password is saved.'));
+        }
+        if (url.pathname === '/account/profile') {
+          if (!account) return back(res, '/account/sign-in');
+          const renamed = await customers.rename(account.customer, form.get('name'));
+          return back(res, renamed.ok ? withDone('/account', 'Saved.') : withProblem('/account', renamed.error));
+        }
+        if (url.pathname.startsWith('/admin/')) {
+          if (!owner) return back(res, '/admin');
+          const action = url.pathname.match(/^\/admin\/shoppers\/(c[a-z0-9]+)\/(disabled|reset)$/);
+          const one = action && customers.get(action[1]);
+          if (one && action[2] === 'disabled') {
+            const off = form.get('disabled') === 'yes';
+            await customers.setDisabled(one.customer, off);
+            await market.audit(who, `${off ? 'turned off' : 'turned back on'} ${one.name}’s account`, one.customer);
+            return back(res, withDone(`/admin/shoppers/${one.customer}`, off ? 'Turned off and signed out everywhere.' : 'Turned back on.'));
+          }
+          if (one) {
+            const raw = await customers.resetToken(one.email);
+            if (!raw) return back(res, withProblem(`/admin/shoppers/${one.customer}`, 'That account is turned off.'));
+            await notify.notify({ email: one.email }, 'reset', { name: one.name, link: `${origin(req)}/account/reset?token=${raw}` });
+            await market.audit(who, `emailed ${one.name} a reset link`, one.customer);
+            return back(res, withDone(`/admin/shoppers/${one.customer}`, 'Sent. It’s in the outbox.'));
+          }
+          return send(res, 404, 'Not found');
+        }
+        if (await staffSite.handle(req, res, url, form)) return;
+        return send(res, 404, 'Not found');
+      }
 
       // The cart's and checkout's forms are the kit's components, posting to plain routes. The
       // session cookie is SameSite=Lax, so another site's form arrives signed out; a browser that
@@ -325,7 +441,40 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
         return res.end('ok');
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
+      if (await staffSite.handle(req, res, url, null)) return;
       const p = zubra.page();
+
+      // A shopper's account pages.
+      if (url.pathname === '/account') return account ? page(req, res, url, { title: 'Your account', person, p, body: accountPages.account({ market, person, said: said(url) }) }) : back(res, '/account/sign-in');
+      if (url.pathname === '/account/sign-in') return account ? back(res, '/account') : page(req, res, url, { title: 'Sign in', person, p, body: accountPages.signIn({ problem: said(url) }) });
+      if (url.pathname === '/account/sign-up') return account ? back(res, '/account') : page(req, res, url, { title: 'Make an account', person, p, body: accountPages.signUp() });
+      if (url.pathname === '/account/forgot') return page(req, res, url, { title: 'Reset your password', person, p, body: accountPages.forgot() });
+      if (url.pathname === '/account/reset') {
+        const raw = url.searchParams.get('token') ?? '';
+        return page(req, res, url, { title: 'Choose a new password', person, p, body: accountPages.reset({ token: raw, works: customers.peek(raw) }) });
+      }
+
+      // The market's admin: its staff only; reports and the outbox for owners.
+      if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
+        const show = (title, body, status) => page(req, res, url, { title, person, p, body, wide: true, status });
+        if (!atDesk) return show('Sign in', staffSite.signIn(url));
+        const bar = staffSite.bar(who);
+        if (url.pathname === '/admin') return show('Overview', admin.dashboard({ who, owner, bar }));
+        if (url.pathname === '/admin/orders') return show('Orders', admin.orders({ url, owner, bar }));
+        if (url.pathname === '/admin/orders.csv') return downloadCsv(res, 'orders.csv', admin.ordersCsv(url));
+        if (url.pathname === '/admin/farms') return show('Farms', admin.farms({ owner, bar }));
+        if (url.pathname === '/admin/drivers') return show('Drivers', admin.drivers({ owner, bar }));
+        if (url.pathname === '/admin/shoppers') return show('Shoppers', admin.shoppers({ url, owner, bar }));
+        if (url.pathname === '/admin/shoppers.csv') return downloadCsv(res, 'shoppers.csv', admin.shoppersCsv());
+        const oneShopper = url.pathname.match(/^\/admin\/shoppers\/(c[a-z0-9]+)$/);
+        const one = oneShopper && customers.get(oneShopper[1]);
+        if (one) return show(one.name, admin.shopper({ one, owner, bar, said: said(url) }));
+        if (['/admin/reports', '/admin/reports.csv', '/admin/outbox'].includes(url.pathname) && !owner) return show('Owners only', '<section><h1>Owners only</h1><p class="lede">Ask an owner to see this page.</p><p><a href="/admin">Back to the overview</a></p></section>', 403);
+        if (url.pathname === '/admin/reports') return show('Reports', admin.reports({ url, owner, bar }));
+        if (url.pathname === '/admin/reports.csv') return downloadCsv(res, 'sales.csv', admin.reportCsv(url));
+        if (url.pathname === '/admin/outbox') return show('Outbox', admin.outbox({ owner, bar }));
+        return send(res, 404, 'Not found');
+      }
 
       if (url.pathname === '/start') {
         const as = (id, verb) => `<form method="post" action="/who"><input type="hidden" name="who" value="${id}">${render(p, 'action-button', { type: 'submit', variant: 'outline' }, { default: `${verb} as ${escape(market.people[id].name.split(' ')[0])}` })}</form>`;
@@ -350,7 +499,8 @@ export async function createApp({ db = join(process.env.DATA_DIR ?? here, 'tailg
           title: 'Market',
           person,
           p,
-          body: `<section><h1>This week at the market</h1><p class="lede">${market.farms.length} farms in the mountains of Western Maryland and West Virginia. Order by noon and a neighbour brings it to your door the same day.</p></section>
+          body: `<section class="hero"><h1>Farm to door</h1><p class="lede">${market.farms.length} farms in the mountains of Western Maryland and West Virginia, one cart, one payment. Order by noon and a neighbour brings each farm’s order to your door the same day.</p><div class="actions"><a class="go" href="#fresh">Shop what’s fresh</a>${person ? '' : '<a class="ghost" href="/account/sign-up">Make an account</a><a class="ghost" href="/start">Try it as someone else</a>'}</div></section>
+<div class="steps3"><div><h3>Shop</h3><p>Fill one cart from several farms and pay once. Follow each farm’s order to your door.</p></div><div><h3>Sell</h3><p>Farmers list what they have, set prices and dress their stall, even with no signal in the field.</p></div><div><h3>Drive</h3><p>Neighbours claim deliveries on their way, pick up at the farm, and earn ${money(market.DELIVERY_CENTS)} each.</p></div></div>
 <section aria-labelledby="stalls"><div class="section-head"><h2 id="stalls">The farms</h2><p>Each farm runs its own stall.</p></div><div class="stalls">${market.farms.map((farm) => stall(p, farm.id)).join('')}</div></section>
 <section aria-labelledby="fresh"><div class="section-head"><h2 id="fresh">For sale today</h2>${person?.role === 'customer' ? '' : '<p><a href="/start">Choose a shopper</a> to order.</p>'}</div>${p.render('market-grid', { items: market.catalog(), farms, canOrder: person?.role === 'customer' })}</section>`,
         });
@@ -452,11 +602,12 @@ ${past.length ? `<section><div class="section-head"><h2>Earlier orders</h2></div
   });
 
   server.on('close', () => market.close());
-  return server;
+  return Object.assign(server, { market, customers, staff, sent: mail.sent });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT ?? 3000);
   const server = await createApp();
+  if (server.staff.needsOwner()) console.log(`Set up the market's first admin (works once, for a day): http://localhost:${port}/staff/accept?token=${await server.staff.setup()}`);
   server.listen(port, '0.0.0.0', () => console.log(`Tailgate on http://localhost:${port}`));
 }

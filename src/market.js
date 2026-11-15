@@ -8,6 +8,7 @@
 // every open page follows.
 import { createSyncServer } from '@zubra/sync/server';
 import { sqliteLog } from '@zubra/sync/sqlite';
+import { SECRET } from '@potomac-solutions/kit/store';
 import { createStages } from '@potomac-solutions/kit/stages';
 import { createCatalog } from '@potomac-solutions/kit/catalog';
 import { createCart } from '@potomac-solutions/kit/cart';
@@ -114,6 +115,9 @@ export async function createMarket({ db = ':memory:' } = {}) {
   const sync = createSyncServer({
     log,
     authorize({ request, collection, key, write }) {
+      // Accounts, sessions and reset tokens (staff and shoppers) are the server's alone: no page
+      // reads or writes them. The admin's activity list too.
+      if (SECRET.includes(collection) || collection === 'audit') return internal.has(request);
       if (!write) return true;
       if (internal.has(request)) return true;
       const person = who(request);
@@ -156,7 +160,9 @@ export async function createMarket({ db = ':memory:' } = {}) {
     collection: 'orders',
     steps: ['placed', 'claimed', 'picked', 'delivered'],
     owner: 'driver',
-    stamp: ['delivered'],
+    // `placed` and `delivered` are stamped with their times. (A checkout's own `placed` field is one
+    // `stages` reserves, so it was dropped: orders paid at checkout had no time placed.)
+    stamp: ['placed', 'delivered'],
   });
 
   // What's for sale is the kit's `catalog`, over the listings farmers write from their devices:
@@ -203,7 +209,9 @@ export async function createMarket({ db = ':memory:' } = {}) {
   }
 
   const seedFarm = (id) => seedFarms.find((farm) => farm.id === id);
-  const personName = (id) => people[id]?.name ?? id;
+  // A shopper with an account isn't one of the demo's people: server.js says how to name them.
+  let nameOf = () => '';
+  const personName = (id) => people[id]?.name ?? (nameOf(id) || id);
 
   /** A farm's storefront as its farmer last set it: name, tagline, colour, theme and logo. */
   function brand(id) {
@@ -351,7 +359,20 @@ export async function createMarket({ db = ':memory:' } = {}) {
 
   return {
     sync,
+    store,
     people,
+    /** How to name someone who isn't one of the demo's people (a shopper's account). */
+    names(fn) {
+      nameOf = fn;
+    },
+    /** Every order, newest first, as the pages show them, with its lines and when it was delivered. */
+    allOrders: () => orders(() => true).map((order) => ({ ...orderView(order), lines: linesOf(order), fee: order.fee ?? 0, customer: order.customer, driver: order.driver, delivered: order.delivered ?? 0 })),
+    DELIVERY_CENTS,
+    /** Something the market's staff did, for the admin's activity list. */
+    async audit(by, what, ref = '') {
+      await write('audit', `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`, { by: by?.name ?? 'System', what: String(what).slice(0, 200), ref, at: Date.now() });
+    },
+    activity: (limit = 20) => docs.all('audit').sort((a, b) => b.at - a.at).slice(0, limit),
     farms: seedFarms,
     brand,
     logoUrl,
